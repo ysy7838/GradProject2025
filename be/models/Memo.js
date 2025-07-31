@@ -2,21 +2,24 @@ import mongoose from "mongoose";
 
 const {Schema, Types} = mongoose;
 
-/* 메모 저장 */
 const MemoSchema = new Schema(
   {
-    categoryId: {type: Types.ObjectId, ref: "Category", required: true},
+    categoryId: {type: Types.ObjectId, ref: "Category"},
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    title: {type: String, required: true, maxlength: 100},
-    content: {type: String, default: ""}, // 마크다운 문자열로 저장
+    title: {type: String, maxlength: 100},
+    content: {type: String, default: ""}, // 마크다운
+    isFavorite: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
-    timestamps: true, // createdAt, updatedAt 자동 생성
-    versionKey: "__v", // 낙관적 락을 위한 버전 키
+    timestamps: true,
+    versionKey: "__v",
     optimisticConcurrency: true, // 데이터 충돌 방지 활성화
   }
 );

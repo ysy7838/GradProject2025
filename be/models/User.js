@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google"],
       default: "local",
     },
+    refreshToken: {
+      type: String,
+      default: null,
+      select: false,
+    },
   },
   {versionKey: false}
 );
