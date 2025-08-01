@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Sookmyung Women's University Graduation Project 2025 - Smart memo application with AI-powered text/image organization features",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "nodemon app.js",
     "start": "node app.js",
@@ -11,10 +12,18 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.842.0",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
+    "ejs": "^3.1.10",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2"
+    "express-async-handler": "^1.2.0",
+    "express-validator": "^7.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.17.0",
+    "mongoose": "^8.16.2",
+    "nodemailer": "^7.0.5"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
