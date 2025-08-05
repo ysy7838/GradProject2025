@@ -1,4 +1,4 @@
-import userRepository from "./user.repository.js";
+import userRepository from "../repository/user.repository.js";
 import bcrypt, { compareSync } from "bcrypt";
 import jwt from "jsonwebtoken";
 import ejs from "ejs";
@@ -40,13 +40,13 @@ const sendVerificationEmail = async (email, verificationCode, subject) => {
     to: email,
     subject,
     html: emailTemplate,
-    attachments: [
-      {
-        filename: "logo.png",
-        path: path.join(appDir, "templates", "logo.png"),
-        cid: "logo",
-      },
-    ],
+    // attachments: [
+    //   {
+    //     filename: "logo.png",
+    //     path: path.join(appDir, "templates", "logo.png"),
+    //     cid: "logo",
+    //   },
+    // ],
   };
 
   try {
@@ -62,12 +62,13 @@ class UserService {
   }
 
   // --- 이메일 인증번호 발송 ---
-  async sendAuthEmail(email, subjectType) {
+  async sendAuthEmail(data) {
+    const {email, subjectType} = data;
     const verificationCode = Math.floor(100000 + Math.random() * 900000);
     const verificationExpires = Date.now() + 1000 * 60 * 5;
 
     const subject = subjectType === "signup" ? subjectSignUp : subjectPasswordReset;
-    let user = await this.userRepository.findUserByEmail(email);
+    let user = await this.userRepository.findOneForUpdate({email});
     console.log(`user: ${user}`);
 
     if (subjectType === "signup") {
@@ -79,7 +80,7 @@ class UserService {
         user.verificationExpires = verificationExpires;
         await this.userRepository.saveUser(user);
       } else {
-        await this.userRepository.createUser({
+        await this.userRepository.create({
           email,
           verificationCode,
           verificationExpires,
@@ -99,8 +100,9 @@ class UserService {
   }
 
   // --- 인증번호 검증 ---
-  async verifyCode(email, code) {
-    const user = await this.userRepository.findUserByEmail(email);
+  async verifyCode(data) {
+    const {email, verificationCode} = data;
+    const user = await this.userRepository.findOne({email});
 
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.USER_NOT_FOUND);
@@ -108,15 +110,16 @@ class UserService {
     if (user.verificationExpires < Date.now()) {
       throw new BadRequestError(AUTH_MESSAGES.CODE_EXPIRED);
     }
-    if (user.verificationCode !== parseInt(code, 10)) {
+    if (user.verificationCode !== parseInt(verificationCode, 10)) {
       throw new BadRequestError(AUTH_MESSAGES.CODE_MISMATCH);
     }
     return user;
   }
 
   // --- 회원가입 완료 ---
-  async signupUser(verifiedEmail, password) {
-    const user = await this.userRepository.findUserByEmail(verifiedEmail);
+  async signupUser(data) {
+    const {verifiedEmail, password} = data;
+    const user = await this.userRepository.findOneForUpdate({email: verifiedEmail});
 
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.USER_NOT_FOUND);
@@ -131,8 +134,9 @@ class UserService {
   }
 
   // --- 로그인 ---
-  async loginUser(email, password, autoLogin) {
-    const user = await this.userRepository.findUserByEmail(email);
+  async loginUser(data) {
+    const {email, password, autoLogin} = data;
+    const user = await this.userRepository.findOneForUpdate({email});
 
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.INVALID_CREDENTIALS);
@@ -155,8 +159,9 @@ class UserService {
   }
 
   // --- 로그아웃 ---
-  async logoutUser(userId) {
-    const user = await this.userRepository.findUserById(userId);
+  async logoutUser(data) {
+    const {userId} = data;
+    const user = await this.userRepository.findByIdForUpdate(userId);
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.USER_INFO_NOT_FOUND);
     }
@@ -166,7 +171,8 @@ class UserService {
   }
 
   // --- 토큰 갱신 ---
-  async refreshAccessToken(refreshToken) {
+  async refreshAccessToken(data) {
+    const {refreshToken} = data;
     if (!refreshToken) {
       throw new BadRequestError(AUTH_MESSAGES.INVALID_REFRESH_TOKEN);
     }
@@ -186,8 +192,9 @@ class UserService {
   }
 
   // --- 회원탈퇴 --- (즉시 탈퇴 및 모든 데이터 삭제)
-  async deleteUser(userId) {
-    const user = await this.userRepository.findUserById(userId);
+  async deleteUser(data) {
+    const {userId} = data;
+    const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.USER_INFO_NOT_FOUND);
     }
@@ -201,11 +208,12 @@ class UserService {
   }
 
   // --- 비밀번호 재설정 관련 ---
-  async sendResetPasswordEmail(email) {
+  async sendResetPasswordEmail(data) {
+    const {email} = data;
     const verificationCode = Math.floor(100000 + Math.random() * 900000);
     const verificationExpires = Date.now() + 1000 * 60 * 5;
 
-    const user = await this.userRepository.findUserByEmail(email);
+    const user = await this.userRepository.findOneForUpdate({email});
 
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.INVALID_CREDENTIALS);
@@ -219,8 +227,9 @@ class UserService {
     return true;
   }
 
-  async resetPassword(email, verificationCode, newPassword) {
-    const user = await this.userRepository.findUserByEmail(email);
+  async resetPassword(data) {
+    const {email, verificationCode, newPassword} = data;
+    const user = await this.userRepository.findOneForUpdate({email});
 
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.USER_NOT_FOUND);

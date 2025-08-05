@@ -3,9 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv"
 
 import connect from "./config/db.js";
-import categoryRoutes from "./modules/categories/category.routes.js";
-import userRoutes from "./modules/users/user.routes.js";
-import memoRoutes from "./modules/memos/memo.routes.js";
+import categoryRoutes from "./modules/categories/routes/category.routes.js";
+import userRoutes from "./modules/users/routes/user.routes.js";
+import memoRoutes from "./modules/memos/routes/memo.routes.js";
 import errorHandler from "./middlewares/errorHandler.js"
 
 dotenv.config();

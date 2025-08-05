@@ -1,6 +1,6 @@
 import {Router} from "express";
 import {authenticate} from "../../middlewares/authenticate.js";
-import UserController from "./user.controller.js";
+import UserController from "../controller/user.controller.js";
 import {
   validateAuthEmail,
   validateVerifyCode,

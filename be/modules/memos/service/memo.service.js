@@ -1,5 +1,5 @@
-import memoRepository from "./memo.repository.js";
-import categoryService from "../categories/category.service.js";
+import memoRepository from "../repository/memo.repository.js";
+import categoryService from "../../categories/service/category.service.js";
 import {NotFoundError} from "../../utils/customError.js";
 import {MEMO_MESSAGES} from "../../constants/message.js";
 

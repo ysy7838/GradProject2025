@@ -1,4 +1,4 @@
-import memoService from "./memo.service.js";
+import memoService from "../service/memo.service.js";
 import asyncHandler from "express-async-handler";
 import {MEMO_MESSAGES} from "../../constants/message.js";
 

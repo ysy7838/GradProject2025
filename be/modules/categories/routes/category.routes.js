@@ -1,5 +1,5 @@
 import {Router} from "express";
-import categoryController from "./category.controller.js";
+import categoryController from "../controller/category.controller.js";
 import {authenticate} from "../../middlewares/authenticate.js";
 import {
   validateCreateCategory,

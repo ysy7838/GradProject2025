@@ -1,6 +1,6 @@
 import {Router} from "express";
 import {authenticate} from "../../middlewares/authenticate.js";
-import memoController from "./memo.controller.js";
+import memoController from "../controller/memo.controller.js";
 import {
   validateGetMemoList,
   validateCreateMemo,
