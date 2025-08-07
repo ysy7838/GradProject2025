@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 
-const CategorySchema = new mongoose.Schema(
+const {Schema, Types} = mongoose;
+
+const CategorySchema = new Schema(
   {
     title: {
       type: String,
@@ -8,12 +10,12 @@ const CategorySchema = new mongoose.Schema(
       maxLength: 50,
     },
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Types.ObjectId,
       ref: "User",
       required: true,
     },
     parentCategoryId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Types.ObjectId,
       ref: "Category",
     },
     order: {

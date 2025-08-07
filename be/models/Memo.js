@@ -6,7 +6,7 @@ const MemoSchema = new Schema(
   {
     categoryId: {type: Types.ObjectId, ref: "Category"},
     createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Types.ObjectId,
       ref: "User",
       required: true,
     },
@@ -16,6 +16,12 @@ const MemoSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    tags: [
+      {
+        type: Types.ObjectId,
+        ref: "Tag",
+      },
+    ],
   },
   {
     timestamps: true,
@@ -28,6 +34,7 @@ const MemoSchema = new Schema(
 MemoSchema.index({categoryId: 1, title: 1}, {collation: {locale: "ko", strength: 2}});
 MemoSchema.index({categoryId: 1, createdAt: -1});
 MemoSchema.index({categoryId: 1, updatedAt: -1});
+MemoSchema.index({tags: 1});
 
 const Memo = mongoose.model("Memo", MemoSchema, "memos");
 export default Memo;
