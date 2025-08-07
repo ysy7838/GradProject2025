@@ -1,6 +1,6 @@
 import memoService from "../service/memo.service.js";
 import asyncHandler from "express-async-handler";
-import {MEMO_MESSAGES} from "../../constants/message.js";
+import {MEMO_MESSAGES} from "../../../constants/message.js";
 
 class MemoController {
   constructor() {
@@ -23,9 +23,9 @@ class MemoController {
 
   // POST /api/memos
   async createMemo(req, res) {
-    const {title, content, categoryId} = req.body;
+    const {title, content, categoryId, tags} = req.body;
     const createdBy = req.user.id;
-    const data = {title, content, categoryId, createdBy};
+    const data = {title, content, categoryId, createdBy, tags};
 
     const newMemo = await this.memoService.createMemo(data);
     res.status(201).json({
@@ -97,9 +97,9 @@ class MemoController {
   // PATCH /api/memos/:memoId
   async updateMemo(req, res) {
     const {memoId} = req.params;
-    const {title, content} = req.body;
+    const {title, content, tags} = req.body;
     const createdBy = req.user.id;
-    const data = {memoId, title, content, createdBy};
+    const data = {memoId, title, content, createdBy, tags};
     const memo = await this.memoService.updateMemo(data);
     res.status(200).json({
       message: MEMO_MESSAGES.UPDATE_SUCCESS,

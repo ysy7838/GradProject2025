@@ -1,7 +1,8 @@
 import memoRepository from "../repository/memo.repository.js";
 import categoryService from "../../categories/service/category.service.js";
-import {NotFoundError} from "../../utils/customError.js";
-import {MEMO_MESSAGES} from "../../constants/message.js";
+import tagService from "./tag.service.js";
+import {NotFoundError} from "../../../utils/customError.js";
+import {MEMO_MESSAGES} from "../../../constants/message.js";
 
 class memoService {
   constructor(memoRepository, categoryService) {
@@ -9,6 +10,7 @@ class memoService {
     this.memoRepository = memoRepository;
   }
 
+  // 메모 권한 체크 헬퍼 함수
   async _getMemoAndCheckPermission(memoIdsOrId, createdBy) {
     let queryCondition;
     let memos;
@@ -29,13 +31,28 @@ class memoService {
     return memos;
   }
 
+  // 태그 처리 헬퍼 함수
+  async _processTags(tagNames) {
+    if (!tagNames || tagNames.length === 0) return [];
+    
+    const tagIds = [];
+    for (const tagName of tagNames) {
+      const tag = await tagService.findOrCreateTag(tagName);
+      tagIds.push(tag._id);
+    }
+    return tagIds;
+  }
+
   // 생성
   async createMemo(data) {
-    const {title, content, categoryId, createdBy} = data;
+    const {title, content, categoryId, createdBy, tags} = data;
     await this.categoryService.getCategoryAndCheckPermission(categoryId, createdBy);
-
-    const dataToCreate = {title, content, categoryId, createdBy};
+    const tagIds = await this._processTags(tags);
+    
+    const dataToCreate = {title, content, categoryId, createdBy, tags: tagIds};
     const newMemo = await this.memoRepository.create(dataToCreate);
+    await tagService.incrementTagUsage(tagIds);
+    
     return newMemo;
   }
 
@@ -58,9 +75,15 @@ class memoService {
 
   // 메모 수정
   async updateMemo(data) {
-    const {memoId, title, content, createdBy} = data;
-    await this._getMemoAndCheckPermission(memoId, createdBy);
+    const {memoId, title, content, createdBy, tags} = data;
+    const existingMemo = await this._getMemoAndCheckPermission(memoId, createdBy);
 
+    if (existingMemo.tags && existingMemo.tags.length > 0) {
+      await tagService.decrementTagUsage(existingMemo.tags);
+    }
+
+    const tagIds = await this._processTags(tags);
+    
     const filter = {
       _id: memoId,
       createdBy: createdBy,
@@ -69,9 +92,12 @@ class memoService {
       $set: {
         title: title,
         content: content,
+        tags: tagIds,
       },
     };
     const updatedMemo = await this.memoRepository.updateOne(filter, update);
+    await tagService.incrementTagUsage(tagIds);
+    
     return updatedMemo;
   }
 
@@ -114,20 +140,44 @@ class memoService {
     const {memoId, createdBy} = data;
     const memo = await this._getMemoAndCheckPermission(memoId, createdBy);
     const title = memo.title + " copy";
-    const {content, categoryId} = memo;
-    const query = {title, content, categoryId, createdBy};
+    const {content, categoryId, tags} = memo;
+    const query = {title, content, categoryId, createdBy, tags};
     const copiedMemo = await this.memoRepository.create(query);
+    
+    if (tags && tags.length > 0) {
+      await tagService.incrementTagUsage(tags);
+    }
+    
     return copiedMemo;
   }
 
   // 메모 삭제 (최소 1개)
   async deleteMemos(data) {
     const {memoIds, createdBy} = data;
-    await this._getMemoAndCheckPermission(memoIds, createdBy);
+    const memos = await this._getMemoAndCheckPermission(memoIds, createdBy);
+
+    const tagIdsToDecrement = [];
+    if (Array.isArray(memos)) {
+      memos.forEach(memo => {
+        if (memo.tags && memo.tags.length > 0) {
+          tagIdsToDecrement.push(...memo.tags);
+        }
+      });
+    } else {
+      if (memos.tags && memos.tags.length > 0) {
+        tagIdsToDecrement.push(...memos.tags);
+      }
+    }
 
     const filter = {_id: {$in: memoIds}, createdBy};
-    const memos = await this.memoRepository.deleteMany(filter);
-    return memos;
+    const result = await this.memoRepository.deleteMany(filter);
+    
+    // 태그 사용 카운트 감소
+    if (tagIdsToDecrement.length > 0) {
+      await tagService.decrementTagUsage(tagIdsToDecrement);
+    }
+    
+    return result;
   }
 
   // 해시태그 자동 생성 => 추가 필요
