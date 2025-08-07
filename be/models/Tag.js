@@ -18,8 +18,6 @@ const tagSchema = new mongoose.Schema({
   versionKey: "__v"
 });
 
-// 인덱스 추가
-tagSchema.index({ tagName: 1 });
 tagSchema.index({ usageCount: 1 });
 
 const Tag = mongoose.model("Tag", tagSchema, "tags");

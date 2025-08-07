@@ -18,10 +18,10 @@ class UserRepository {
 
   // 조회
   async findById(id) {
-    return this.Memo.findById(id).lean();
+    return this.Memo.findById(id).populate("tags", "_id tagName").lean();
   }
   async findOne(filter) {
-    return this.Memo.findOne(filter).lean();
+    return this.Memo.findOne(filter).populate("tags", "_id tagName").lean();
   }
   async find(filter, projection = null, options = {}) {
     let dbQuery = this.Memo.find(filter);
@@ -38,6 +38,8 @@ class UserRepository {
     if (options.skip) {
       dbQuery = dbQuery.skip(options.skip);
     }
+    dbQuery = dbQuery.populate("tags", "_id tagName");
+    
     // TODO: select, populate 등 필요한 다른 Mongoose 쿼리 옵션 추가 가능
 
     return dbQuery.lean();
@@ -45,7 +47,7 @@ class UserRepository {
 
   // 수정
   async updateOne(filter, update, options = {new: true, runValidators: true}) {
-    return this.Memo.findOneAndUpdate(filter, update, options).lean();
+    return this.Memo.findOneAndUpdate(filter, update, options).populate("tags", "_id tagName").lean();
   }
   async updateMany(filter, update, options = {}) {
     return this.Memo.updateMany(filter, update, options);

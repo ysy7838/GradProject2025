@@ -34,7 +34,7 @@ class memoService {
   // 태그 처리 헬퍼 함수
   async _processTags(tagNames) {
     if (!tagNames || tagNames.length === 0) return [];
-    
+
     const tagIds = [];
     for (const tagName of tagNames) {
       const tag = await tagService.findOrCreateTag(tagName);
@@ -48,11 +48,11 @@ class memoService {
     const {title, content, categoryId, createdBy, tags} = data;
     await this.categoryService.getCategoryAndCheckPermission(categoryId, createdBy);
     const tagIds = await this._processTags(tags);
-    
+
     const dataToCreate = {title, content, categoryId, createdBy, tags: tagIds};
     const newMemo = await this.memoRepository.create(dataToCreate);
     await tagService.incrementTagUsage(tagIds);
-    
+
     return newMemo;
   }
 
@@ -79,11 +79,12 @@ class memoService {
     const existingMemo = await this._getMemoAndCheckPermission(memoId, createdBy);
 
     if (existingMemo.tags && existingMemo.tags.length > 0) {
-      await tagService.decrementTagUsage(existingMemo.tags);
+      const existingTagIds = existingMemo.tags.map((tag) => tag._id.toString());
+      await tagService.decrementTagUsage(existingTagIds);
     }
 
-    const tagIds = await this._processTags(tags);
-    
+    const newTagIds = await this._processTags(tags);
+
     const filter = {
       _id: memoId,
       createdBy: createdBy,
@@ -92,12 +93,12 @@ class memoService {
       $set: {
         title: title,
         content: content,
-        tags: tagIds,
+        tags: newTagIds,
       },
     };
     const updatedMemo = await this.memoRepository.updateOne(filter, update);
-    await tagService.incrementTagUsage(tagIds);
-    
+    await tagService.incrementTagUsage(newTagIds);
+
     return updatedMemo;
   }
 
@@ -143,11 +144,11 @@ class memoService {
     const {content, categoryId, tags} = memo;
     const query = {title, content, categoryId, createdBy, tags};
     const copiedMemo = await this.memoRepository.create(query);
-    
+
     if (tags && tags.length > 0) {
       await tagService.incrementTagUsage(tags);
     }
-    
+
     return copiedMemo;
   }
 
@@ -156,27 +157,19 @@ class memoService {
     const {memoIds, createdBy} = data;
     const memos = await this._getMemoAndCheckPermission(memoIds, createdBy);
 
-    const tagIdsToDecrement = [];
-    if (Array.isArray(memos)) {
-      memos.forEach(memo => {
-        if (memo.tags && memo.tags.length > 0) {
-          tagIdsToDecrement.push(...memo.tags);
-        }
-      });
-    } else {
-      if (memos.tags && memos.tags.length > 0) {
-        tagIdsToDecrement.push(...memos.tags);
-      }
-    }
+    const memoArray = Array.isArray(memos) ? memos : [memos];
+
+    const tagIdsToDecrement = memoArray.flatMap((memo) =>
+      memo.tags ? memo.tags.map((tag) => tag._id.toString()) : []
+    );
 
     const filter = {_id: {$in: memoIds}, createdBy};
     const result = await this.memoRepository.deleteMany(filter);
-    
-    // 태그 사용 카운트 감소
+
     if (tagIdsToDecrement.length > 0) {
       await tagService.decrementTagUsage(tagIdsToDecrement);
     }
-    
+
     return result;
   }
 
