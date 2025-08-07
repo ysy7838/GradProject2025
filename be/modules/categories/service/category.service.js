@@ -1,7 +1,7 @@
 import categoryRepository from "../repository/category.repository.js";
 import memoRepository from "../../memos/repository/memo.repository.js";
-import {BadRequestError, ForbiddenError, ConflictError, NotFoundError} from "../../utils/customError.js";
-import {CATEGORY_MESSAGES} from "../../constants/message.js";
+import {BadRequestError, ForbiddenError, ConflictError, NotFoundError} from "../../../utils/customError.js";
+import {CATEGORY_MESSAGES} from "../../../constants/message.js";
 
 class CategoryService {
   constructor() {

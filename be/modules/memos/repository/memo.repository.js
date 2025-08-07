@@ -1,7 +1,7 @@
-import User from "../../models/User.js";
-import Category from "../../models/Category.js";
-import Memo from "../../models/Memo.js";
-import Tag from "../../models/Tag.js";
+import User from "../../../models/User.js";
+import Category from "../../../models/Category.js";
+import Memo from "../../../models/Memo.js";
+import Tag from "../../../models/Tag.js";
 
 class UserRepository {
   constructor() {

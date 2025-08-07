@@ -1,6 +1,6 @@
 import userService from "../service/user.service.js";
 import asyncHandler from "express-async-handler";
-import {AUTH_MESSAGES, USER_MESSAGES} from "../../constants/message.js";
+import {AUTH_MESSAGES, USER_MESSAGES} from "../../../constants/message.js";
 
 class UserController {
   constructor() {

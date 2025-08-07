@@ -1,13 +1,13 @@
 import {Router} from "express";
 import categoryController from "../controller/category.controller.js";
-import {authenticate} from "../../middlewares/authenticate.js";
+import {authenticate} from "../../../middlewares/authenticate.js";
 import {
   validateCreateCategory,
   validateUpdateCategoryTitle,
   validateUpdateCategoriesColor,
   validateMoveCategory,
   validateDeleteCategories,
-} from "../../utils/validators/validators.category.js";
+} from "../../../utils/validators/validators.category.js";
 
 const router = Router();
 

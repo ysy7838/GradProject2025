@@ -1,7 +1,6 @@
-// modules/categories/category.controller.js
 import categoryService from "../service/category.service.js";
 import asyncHandler from "express-async-handler";
-import {CATEGORY_MESSAGES} from "../../constants/message.js";
+import {CATEGORY_MESSAGES} from "../../../constants/message.js";
 
 class CategoryController {
   constructor() {

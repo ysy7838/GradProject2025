@@ -1,5 +1,5 @@
 import {Router} from "express";
-import {authenticate} from "../../middlewares/authenticate.js";
+import {authenticate} from "../../../middlewares/authenticate.js";
 import UserController from "../controller/user.controller.js";
 import {
   validateAuthEmail,
@@ -8,7 +8,7 @@ import {
   validateLogin,
   validateResetPasswordEmail,
   validateResetPassword,
-} from "../../utils/validators/validators.user.js";
+} from "../../../utils/validators/validators.user.js";
 
 const router = Router();
 
