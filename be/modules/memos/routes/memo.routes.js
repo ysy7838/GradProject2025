@@ -1,7 +1,6 @@
 import {Router} from "express";
 import {authenticate} from "../../../middlewares/authenticate.js";
 import memoController from "../controller/memo.controller.js";
-import fileController from "../controller/file.controller.js";
 import {
   validateGetMemoList,
   validateCreateMemo,
@@ -50,8 +49,5 @@ router.post("/:memoId/copy", authenticate, validateCopyMemo, memoController.copy
 
 // 해시태그 자동 생성
 router.patch("/:memoId/recommend-tags", authenticate, memoController.makeHashtags);
-
-// 파일 presigned-url 요청
-router.post("/file/presigned-url", authenticate, fileController.getPresignedUrl);
 
 export default router;

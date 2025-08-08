@@ -4,6 +4,9 @@ export const COMMON_MESSAGES = {
   INVALID_ID_FORMAT: "잘못된 ID 형식입니다.",
   INVALID_ARRAY_FORMAT: "배열 형식이어야 합니다.",
   ARRAY_EMPTY: "선택한 아이템이 없습니다.",
+  CREATION_FAILED: "생성에 실패했습니다.",
+  UPDATE_FAILED: "업데이트에 실패했습니다.",
+  DELETION_FAILED: "삭제에 실패했습니다.",
 };
 
 export const AUTH_MESSAGES = {
@@ -108,4 +111,44 @@ export const MEMO_MESSAGES = {
   FAVORITE_ALREADY_EXISTS: "이미 즐겨찾기에 추가된 메모입니다.",
   FAVORITE_NOT_FOUND: "즐겨찾기에서 해당 메모를 찾을 수 없습니다.",
   CANNOT_DELETE_NON_EXISTENT_FAVORITE: "존재하지 않는 즐겨찾기를 삭제할 수 없습니다.",
+};
+
+export const TAG_MESSAGES = {
+  // 성공 메시지
+  CREATE_SUCCESS: "태그가 성공적으로 생성되었습니다.",
+  DELETE_SUCCESS: "사용되지 않는 태그가 삭제되었습니다.",
+
+  // invalid 에러
+  INVALID_NAME_LENGTH: "태그 이름은 1~15자 사이여야 합니다.",
+  INVALID_ID_FORMAT: "유효하지 않은 태그 ID입니다.",
+  DUPLICATE_NAME: "이미 동일한 이름의 태그가 있습니다.",
+  TAG_LIMIT_EXCEEDED: "태그는 최대 5개까지 추가할 수 있습니다.",
+  INVALID_TAG_FORMAT: "태그는 1-15자 사이의 문자열이어야 합니다.",
+
+  // 에러 메시지
+  TAG_NOT_FOUND: "태그를 찾을 수 없습니다.",
+};
+
+export const FILE_MESSAGES = {
+  // 성공 메시지
+  PRESIGNED_URL_SUCCESS: "파일 업로드를 위한 presigned URL이 성공적으로 생성되었습니다.",
+  FILE_UPLOAD_SUCCESS: "파일이 성공적으로 업로드되었습니다.",
+  FILE_DELETE_SUCCESS: "파일이 성공적으로 삭제되었습니다.",
+  FILE_DOWNLOAD_SUCCESS: "파일이 성공적으로 다운로드되었습니다.",
+
+  // invalid 에러
+  FILE_NAME_AND_TYPE_REQUIRED: "fileName과 fileType은 필수 항목입니다.",
+  INVALID_FILE_TYPE: "지원하지 않는 파일 형식입니다.",
+  INVALID_FILE_SIZE: "파일 크기가 너무 큽니다. 최대 크기는 10MB입니다.",
+  INVALID_PRESIGNED_URL: "유효하지 않은 presigned URL입니다.",
+  INVALID_FILE_ID: "유효하지 않은 파일 ID입니다.",
+  FILE_NOT_FOUND: "파일을 찾을 수 없습니다.",
+  FILE_ALREADY_EXISTS: "이미 동일한 이름의 파일이 존재합니다.",
+  FILE_UPLOAD_ERROR: "파일 업로드 중 오류가 발생했습니다.",
+  FILE_DELETE_ERROR: "파일 삭제 중 오류가 발생했습니다.",
+  FILE_DOWNLOAD_ERROR: "파일 다운로드 중 오류가 발생했습니다.",
+
+  // 에러 메시지
+  PRESIGNED_URL_ERROR: "Presigned URL 생성 중 오류가 발생했습니다.",
+  FILE_OPERATION_ERROR: "파일 작업 중 오류가 발생했습니다.",
 };
