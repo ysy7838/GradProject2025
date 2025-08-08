@@ -45,6 +45,12 @@ class ExternalServiceError extends CustomError {
   }
 }
 
+class InternalServerError extends CustomError {
+  constructor(message = "서버 내부 오류가 발생했습니다.") {
+    super(message, 500);
+  }
+}
+
 export {
   CustomError,
   BadRequestError,
@@ -53,4 +59,5 @@ export {
   NotFoundError,
   ConflictError,
   ExternalServiceError,
+  InternalServerError,
 };
