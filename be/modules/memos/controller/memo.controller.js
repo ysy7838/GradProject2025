@@ -42,6 +42,7 @@ class MemoController {
     const memos = await this.memoService.getMemoList(data);
     res.status(200).json({
       message: MEMO_MESSAGES.GET_LIST_SUCCESS,
+      count: memos.length,
       memos: memos,
     });
   }

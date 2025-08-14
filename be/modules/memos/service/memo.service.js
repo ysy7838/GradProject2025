@@ -1,12 +1,13 @@
 import memoRepository from "../repository/memo.repository.js";
 import categoryService from "../../categories/service/category.service.js";
 import tagService from "./tag.service.js";
-import {NotFoundError} from "../../../utils/customError.js";
+import {NotFoundError, InternalServerError} from "../../../utils/customError.js";
 import {MEMO_MESSAGES} from "../../../constants/message.js";
+import {COMMON_MESSAGES} from "../../../constants/message.js";
+import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
 
 class memoService {
-  constructor(memoRepository, categoryService) {
-    this.categoryService = categoryService;
+  constructor() {
     this.memoRepository = memoRepository;
   }
 
@@ -46,20 +47,24 @@ class memoService {
   // 생성
   async createMemo(data) {
     const {title, content, categoryId, createdBy, tags} = data;
-    await this.categoryService.getCategoryAndCheckPermission(categoryId, createdBy);
+
+    await getCategoryAndCheckPermission(categoryId, createdBy);
     const tagIds = await this._processTags(tags);
 
     const dataToCreate = {title, content, categoryId, createdBy, tags: tagIds};
-    const newMemo = await this.memoRepository.create(dataToCreate);
-    await tagService.incrementTagUsage(tagIds);
-
-    return newMemo;
+    try {
+      const newMemo = await this.memoRepository.create(dataToCreate);
+      await tagService.incrementTagUsage(tagIds);
+      return newMemo;
+    } catch (error) {
+      throw new InternalServerError(COMMON_MESSAGES.CREATION_FAILED);
+    }
   }
 
   // 카테고리 내 메모 목록 조회
   async getMemoList(data) {
     const {categoryId, createdBy} = data;
-    await this.categoryService.getCategoryAndCheckPermission(categoryId, createdBy);
+    await getCategoryAndCheckPermission(categoryId, createdBy);
 
     const filter = {categoryId, createdBy};
     const projection = {content: 0}; // content 필드 제외
@@ -136,6 +141,22 @@ class memoService {
     return updatedMemos;
   }
 
+  // 메모 이동 (카테고리별)
+  async moveMemosByCategoryIds(data) {
+    const {categoryIds, newCategoryId, createdBy} = data;
+    const filter = {
+      categoryId: {$in: categoryIds},
+      createdBy: createdBy,
+    };
+    const update = {
+      $set: {
+        categoryId: newCategoryId,
+      },
+    };
+    const updatedMemos = await this.memoRepository.updateMany(filter, update);
+    return updatedMemos;
+  }
+
   // 메모 복사
   async copyMemo(data) {
     const {memoId, createdBy} = data;
@@ -143,12 +164,14 @@ class memoService {
     const title = memo.title + " copy";
     const {content, categoryId, tags} = memo;
     const query = {title, content, categoryId, createdBy, tags};
+
+    // S3에서 이미지 복사하는 로직 추가 필요
+
     const copiedMemo = await this.memoRepository.create(query);
 
     if (tags && tags.length > 0) {
       await tagService.incrementTagUsage(tags);
     }
-
     return copiedMemo;
   }
 
@@ -156,8 +179,6 @@ class memoService {
   async deleteMemos(data) {
     const {memoIds, createdBy} = data;
     const memos = await this._getMemoAndCheckPermission(memoIds, createdBy);
-
-    const memoArray = Array.isArray(memos) ? memos : [memos];
 
     const tagIdsToDecrement = memoArray.flatMap((memo) =>
       memo.tags ? memo.tags.map((tag) => tag._id.toString()) : []
@@ -170,6 +191,20 @@ class memoService {
       await tagService.decrementTagUsage(tagIdsToDecrement);
     }
 
+    return result;
+  }
+
+  async deleteMemosByCategoryIds(categoryIds) {
+    const filter = {categoryId: {$in: categoryIds}};
+    const memos = await this.memoRepository.find(filter);
+    if (memos.length === 0) return;
+
+    const tagIdsToDecrement = memos.flatMap((memo) => (memo.tags ? memo.tags.map((tag) => tag._id.toString()) : []));
+
+    const result = await this.memoRepository.deleteMany(filter);
+    if (tagIdsToDecrement.length > 0) {
+      await tagService.decrementTagUsage(tagIdsToDecrement);
+    }
     return result;
   }
 
@@ -204,4 +239,4 @@ class memoService {
   }
 }
 
-export default new memoService(memoRepository, categoryService);
+export default new memoService();
