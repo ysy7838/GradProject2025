@@ -19,30 +19,8 @@ class CategoryRepository {
     return this.Category.find(query).lean();
   }
 
-  async findExistingTitle(title, userId, excludeCategoryId = null) {
-    const query = {title, createdBy: userId};
-    if (excludeCategoryId) {
-      query._id = {$ne: excludeCategoryId};
-    }
-    return this.Category.exists(query);
-  }
-
-  async findMaxOrder(userId, parentCategoryId = null) {
-    const result = await this.Category.aggregate([
-      {
-        $match: {
-          parentCategoryId: parentCategoryId,
-          createdBy: userId,
-        },
-      },
-      {
-        $group: {
-          _id: null,
-          maxOrder: {$max: "$order"},
-        },
-      },
-    ]);
-    return result.length > 0 ? result[0].maxOrder : -1;
+  async exists(query) {
+    return this.Category.exists(query).lean();
   }
 
   // 조회
@@ -103,23 +81,12 @@ class CategoryRepository {
   }
 
   // 수정
-  async findOneAndUpdate(query, update, options) {
-    return this.Category.findOneAndUpdate(query, update, options);
+  async updateOne(filter, update, options = {new: true, runValidators: true}) {
+    return this.Category.updateOne(filter, update, options).lean();
   }
 
   async updateMany(query, update, options) {
     return this.Category.updateMany(query, update, options);
-  }
-
-  async updateManyOrders(updates) {
-    // updates [{ _id: categoryId1, order: newOrder1 }, { _id: categoryId2, order: newOrder2 }, ...] 형태
-    const bulkOps = updates.map((item) => ({
-      updateOne: {
-        filter: {_id: item._id},
-        update: {$set: {order: item.order}},
-      },
-    }));
-    return this.Category.bulkWrite(bulkOps);
   }
 
   // 삭제

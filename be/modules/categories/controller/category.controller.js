@@ -16,9 +16,11 @@ class CategoryController {
 
   // POST /api/categories
   async createCategory(req, res) {
-    const {title, parentCategoryId, color} = req.body;
+    const {title, parentCategoryId = null, color} = req.body;
     const createdBy = req.user.id;
-    const newCategory = await this.categoryService.createCategory(title, createdBy, parentCategoryId, color);
+    const data = {title, createdBy, parentCategoryId, color};
+
+    const newCategory = await this.categoryService.createCategory(data);
 
     res.status(201).json({
       message: CATEGORY_MESSAGES.CREATE_SUCCESS,
@@ -29,8 +31,10 @@ class CategoryController {
   // GET /api/categories
   async getCategories(req, res) {
     const createdBy = req.user.id;
-    const {parentCategoryId} = req.query;
-    const categories = await this.categoryService.getCategories(createdBy, parentCategoryId || null);
+    const {parentCategoryId = null} = req.query;
+    const data = {createdBy, parentCategoryId};
+
+    const categories = await this.categoryService.getCategories(data);
 
     res.status(200).json({
       message: CATEGORY_MESSAGES.GET_SUCCESS,
@@ -44,69 +48,53 @@ class CategoryController {
     const {categoryId} = req.params;
     const {title} = req.body;
     const createdBy = req.user.id;
+    const data = {categoryId, title, createdBy};
 
-    const result = await this.categoryService.updateCategoryTitle(categoryId, title, createdBy);
+    const result = await this.categoryService.updateCategoryTitle(data);
 
-    if (result && result.modifiedCount > 0) {
-      res.status(200).json({
-        message: CATEGORY_MESSAGES.UPDATE_TITLE_SUCCESS,
-        modifiedCount: result.modifiedCount,
-        category: result.categories ? result.categories[0] : undefined,
-      });
-    } else {
-      res.status(200).json({message: CATEGORY_MESSAGES.NO_CHANGE});
-    }
+    res.status(200).json({
+      message: CATEGORY_MESSAGES.UPDATE_TITLE_SUCCESS,
+      modifiedCount: result.modifiedCount,
+    });
   }
 
   // PATCH /api/categories/color
   async updateCategoriesColor(req, res) {
     const {categoryIds, color} = req.body;
     const createdBy = req.user.id;
-    const result = await this.categoryService.updateCategoryColor(categoryIds, color, createdBy);
+    const data = {categoryIds, color, createdBy};
+    const result = await this.categoryService.updateCategoryColor(data);
 
-    if (result && result.modifiedCount > 0) {
-      res.status(200).json({
-        message: CATEGORY_MESSAGES.UPDATE_COLOR_SUCCESS,
-        modifiedCount: result.modifiedCount,
-        category: result.categories,
-      });
-    } else {
-      res.status(200).json({message: CATEGORY_MESSAGES.NO_CHANGE});
-    }
+    res.status(200).json({
+      message: CATEGORY_MESSAGES.UPDATE_COLOR_SUCCESS,
+      modifiedCount: result.modifiedCount,
+    });
   }
 
   // PATCH /api/categories/move 수정 필요
   async moveCategory(req, res) {
     const {categoryIds, newParentCategoryId} = req.body;
     const createdBy = req.user.id;
+    const data = {categoryIds, newParentCategoryId, createdBy};
 
-    const result = await this.categoryService.moveCategory(categoryIds, newParentCategoryId, createdBy);
+    const result = await this.categoryService.moveCategory(data);
 
-    if (result && result.modifiedCount > 0) {
-      res.status(200).json({
-        message: CATEGORY_MESSAGES.MOVE_SUCCESS,
-        modifiedCount: result.modifiedCount,
-        category: result.categories ? result.categories[0] : undefined,
-      });
-    } else {
-      res.status(200).json({message: CATEGORY_MESSAGES.NO_CHANGE});
-    }
+    res.status(200).json({
+      message: CATEGORY_MESSAGES.MOVE_SUCCESS,
+      modifiedCount: result.modifiedCount,
+    });
   }
 
   // DELETE /api/categories
   async deleteCategories(req, res) {
     const {categoryIds} = req.body;
     const createdBy = req.user.id;
-    const result = await this.categoryService.deleteCategories(categoryIds, createdBy);
+    const data = {categoryIds, createdBy};
+    
+    await this.categoryService.deleteCategories(data);
+    
     res.status(200).json({message: CATEGORY_MESSAGES.DELETE_SUCCESS});
   }
 }
-
-// asyncHandler 래핑 -> try-catch 블록 제거
-Object.keys(CategoryController.prototype).forEach((key) => {
-  if (typeof CategoryController.prototype[key] === "function" && key !== "constructor") {
-    CategoryController.prototype[key] = asyncHandler(CategoryController.prototype[key]);
-  }
-});
 
 export default new CategoryController();

@@ -12,15 +12,9 @@ export const validateUpdateCategoryTitle = [validateObjectId("categoryId"), vali
 
 export const validateUpdateCategoriesColor = [validateObjectIdArray("categoryIds"), validateMiddleware];
 
-export const validateMoveCategory = [
-  validateObjectId("categoryId"),
-  validateObjectId("newParentCategoryId"),
-  validateMiddleware,
-];
-
 export const validateMoveCategories = [
-  validateObjectIdArray("categoryIds"),
-  validateObjectId("newCategory"),
+  validateObjectId("categoryIds"),
+  validateObjectId("newCategoryId"),
   validateMiddleware,
 ];
 
