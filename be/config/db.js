@@ -6,7 +6,7 @@ dotenv.config();
 const mongoURI = process.env.MONGO_URI;
 
 // db 연결
-const connect = async () => {
+export const mongoConnect = async () => {
   try {
     await mongoose.connect(mongoURI);
     console.log("MongoDB가 연결되었습니다.");
@@ -15,5 +15,3 @@ const connect = async () => {
     process.exit(1);
   }
 };
-
-export default connect;
