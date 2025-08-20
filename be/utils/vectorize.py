@@ -67,6 +67,7 @@ if __name__ == "__main__":
                 cleaned_sentence = clean_sentence(sentence)
                 if cleaned_sentence:  # 빈 문장 제외
                     vector = model.encode(cleaned_sentence).tolist()
+                    vectors.append(vector)
 
             # 5. JSON 형태로 벡터 배열 출력
             print(json.dumps({"vectors": vectors, "sentenceCount": len(vectors)}))
