@@ -1,12 +1,11 @@
-import categoryRepository from "../repository/category.repository.js";
-import memoService from "../../memos/service/memo.service.js";
 import {ForbiddenError, ConflictError} from "../../../utils/customError.js";
 import {CATEGORY_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
 
 class CategoryService {
-  constructor() {
+  constructor(categoryRepository, memoService) {
     this.categoryRepository = categoryRepository;
+    this.memoService = memoService;
   }
 
   async _isTitleExists(title, createdBy, excludeCategoryId = null) {
@@ -70,7 +69,7 @@ class CategoryService {
     const {categoryIds, newCategoryId, createdBy} = data;
     await getCategoryAndCheckPermission([...categoryIds, newCategoryId], createdBy);
 
-    const updatedMemos = await memoService.moveMemosByCategoryIds(data);
+    const updatedMemos = await this.memoService.moveMemosByCategoryIds(data);
     return updatedMemos;
   }
 
@@ -82,10 +81,10 @@ class CategoryService {
     if (categoriesToDelete.length !== categoryIds.length) {
       throw new ForbiddenError(CATEGORY_MESSAGES.CATEGORY_NOT_FOUND_OR_NO_PERMISSION);
     }
-    await memoService.deleteMemosByCategoryIds(categoryIds);
+    await this.memoService.deleteMemosByCategoryIds(categoryIds);
     await this.categoryRepository.deleteMany({_id: {$in: categoryIds}});
     return {message: "카테고리 삭제 완료"};
   }
 }
 
-export default new CategoryService();
+export default CategoryService;

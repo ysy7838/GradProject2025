@@ -1,9 +1,8 @@
-import categoryService from "../service/category.service.js";
 import asyncHandler from "express-async-handler";
 import {CATEGORY_MESSAGES} from "../../../constants/message.js";
 
 class CategoryController {
-  constructor() {
+  constructor(categoryService) {
     this.categoryService = categoryService;
 
     this.createCategory = asyncHandler(this.createCategory.bind(this));
@@ -90,11 +89,11 @@ class CategoryController {
     const {categoryIds} = req.body;
     const createdBy = req.user.id;
     const data = {categoryIds, createdBy};
-    
+
     await this.categoryService.deleteCategories(data);
-    
+
     res.status(200).json({message: CATEGORY_MESSAGES.DELETE_SUCCESS});
   }
 }
 
-export default new CategoryController();
+export default CategoryController;

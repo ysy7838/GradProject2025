@@ -1,7 +1,5 @@
-import Tag from "../../../models/Tag.js";
-
 class TagRepository {
-  constructor() {
+  constructor(Tag) {
     this.Tag = Tag;
   }
 
@@ -58,4 +56,4 @@ class TagRepository {
   }
 }
 
-export default new TagRepository();
+export default TagRepository;

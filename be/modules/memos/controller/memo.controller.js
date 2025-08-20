@@ -1,9 +1,8 @@
-import memoService from "../service/memo.service.js";
 import asyncHandler from "express-async-handler";
 import {MEMO_MESSAGES} from "../../../constants/message.js";
 
 class MemoController {
-  constructor() {
+  constructor(memoService) {
     this.memoService = memoService;
 
     this.createMemo = asyncHandler(this.createMemo.bind(this));
@@ -130,9 +129,9 @@ class MemoController {
     });
   }
 
-  // POST /api/memos/:memoId/vectorize
+  // POST /api/memos/vectorize
   async convertToVec(req, res) {
-    const {memoId} = req.params;
+    const {memoId} = req.body;
     const memo = await this.memoService.convertToVec(memoId);
     res.status(200).json({
       message: MEMO_MESSAGES.CONVERT_TO_VEC_SUCCESS,
@@ -161,4 +160,4 @@ class MemoController {
   }
 }
 
-export default new MemoController();
+export default MemoController;

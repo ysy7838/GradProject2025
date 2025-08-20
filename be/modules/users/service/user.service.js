@@ -1,5 +1,4 @@
-import userRepository from "../repository/user.repository.js";
-import bcrypt, { compareSync } from "bcrypt";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import ejs from "ejs";
 import path from "path";
@@ -57,7 +56,7 @@ const sendVerificationEmail = async (email, verificationCode, subject) => {
 };
 
 class UserService {
-  constructor() {
+  constructor(userRepository) {
     this.userRepository = userRepository;
   }
 
@@ -251,4 +250,4 @@ class UserService {
   }
 }
 
-export default new UserService();
+export default UserService;

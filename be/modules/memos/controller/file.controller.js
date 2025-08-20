@@ -1,9 +1,8 @@
 import asyncHandler from "express-async-handler";
-import fileService from "../service/file.service.js";
 import {FILE_MESSAGES} from "../../../constants/message.js";
 
 class FileController {
-  constructor() {
+  constructor(fileService) {
     this.fileService = fileService;
     this.getPresignedUrl = asyncHandler(this.getPresignedUrl.bind(this));
   }
@@ -21,4 +20,4 @@ class FileController {
   }
 }
 
-export default new FileController();
+export default FileController;

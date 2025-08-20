@@ -1,18 +1,18 @@
-import {S3Client, PutObjectCommand, GetObjectCommand} from "@aws-sdk/client-s3";
+import {PutObjectCommand, GetObjectCommand} from "@aws-sdk/client-s3";
 import {getSignedUrl} from "@aws-sdk/s3-request-presigner";
 import {FILE_MESSAGES} from "../../../constants/message.js";
 import {ExternalServiceError} from "../../../utils/customError.js";
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
+// const s3Client = new S3Client({
+//   region: process.env.AWS_REGION,
+//   credentials: {
+//     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+//     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+//   },
+// });
 
 class FileService {
-  constructor() {
+  constructor(s3Client) {
     this.s3Client = s3Client;
   }
 
@@ -26,7 +26,6 @@ class FileService {
       throw new ExternalServiceError(FILE_MESSAGES.PRESIGNED_URL_ERROR);
     }
   }
-
 
   // 파일 업로드 presigned URL 생성
   async getPresignedUrlForUpload(data) {
@@ -61,4 +60,4 @@ class FileService {
   }
 }
 
-export default new FileService();
+export default FileService;

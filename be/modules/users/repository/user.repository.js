@@ -1,14 +1,8 @@
-import User from "../../../models/User.js";
-import Category from "../../../models/Category.js";
-import Memo from "../../../models/Memo.js";
-import Tag from "../../../models/Tag.js";
-
 class UserRepository {
-  constructor() {
+  constructor(User, Category, Memo) {
     this.User = User;
     this.Category = Category;
     this.Memo = Memo;
-    this.Tag = Tag;
   }
 
   // 생성
@@ -20,20 +14,20 @@ class UserRepository {
   async findById(id) {
     return this.User.findById(id).lean();
   }
-  
+
   async findOne(filter) {
     return this.User.findOne(filter).lean();
   }
-  
+
   // 조회 (Mongoose Document - 수정 가능)
   async findOneForUpdate(filter) {
     return this.User.findOne(filter);
   }
-  
+
   async findByIdForUpdate(id) {
     return this.User.findById(id);
   }
-  
+
   async find(filter, projection = null, options = {}) {
     let dbQuery = this.User.find(filter);
 
@@ -57,7 +51,7 @@ class UserRepository {
   async updateOne(filter, update, options = {new: true, runValidators: true}) {
     return this.User.findOneAndUpdate(filter, update, options).lean();
   }
-  
+
   async updateMany(filter, update, options = {}) {
     return this.User.updateMany(filter, update, options);
   }
@@ -66,7 +60,7 @@ class UserRepository {
   async deleteOne(filter) {
     return this.User.findOneAndDelete(filter).lean();
   }
-  
+
   async deleteMany(filter) {
     return this.User.deleteMany(filter);
   }
@@ -94,4 +88,4 @@ class UserRepository {
   }
 }
 
-export default new UserRepository();
+export default UserRepository;

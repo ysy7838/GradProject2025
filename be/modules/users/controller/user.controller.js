@@ -1,9 +1,8 @@
-import userService from "../service/user.service.js";
 import asyncHandler from "express-async-handler";
 import {AUTH_MESSAGES, USER_MESSAGES} from "../../../constants/message.js";
 
 class UserController {
-  constructor() {
+  constructor(userService) {
     this.userService = userService;
 
     this.authEmail = asyncHandler(this.authEmail.bind(this));
@@ -46,11 +45,7 @@ class UserController {
   async loginUser(req, res) {
     const {email, password, autoLogin = false} = req.body;
     const data = {email, password, autoLogin};
-    const {
-      accessToken,
-      refreshToken,
-      autoLogin: autoLoginResult,
-    } = await this.userService.loginUser(data);
+    const {accessToken, refreshToken, autoLogin: autoLoginResult} = await this.userService.loginUser(data);
 
     res.status(200).json({
       message: AUTH_MESSAGES.LOGIN_SUCCESS,
@@ -101,4 +96,4 @@ class UserController {
   }
 }
 
-export default new UserController();
+export default UserController;

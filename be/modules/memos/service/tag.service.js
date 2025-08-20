@@ -1,4 +1,3 @@
-import tagRepository from "../repository/tag.repository.js";
 import {CustomError} from "../../../utils/customError.js";
 
 class TagService {
@@ -77,4 +76,4 @@ class TagService {
   }
 }
 
-export default new TagService(tagRepository); 
+export default TagService;

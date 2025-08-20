@@ -1,14 +1,6 @@
-import User from "../../../models/User.js";
-import Category from "../../../models/Category.js";
-import Memo from "../../../models/Memo.js";
-import Tag from "../../../models/Tag.js";
-
 class UserRepository {
-  constructor() {
-    this.User = User;
-    this.Category = Category;
+  constructor(Memo) {
     this.Memo = Memo;
-    this.Tag = Tag;
   }
 
   // 생성
@@ -39,7 +31,7 @@ class UserRepository {
       dbQuery = dbQuery.skip(options.skip);
     }
     dbQuery = dbQuery.populate("tags", "_id tagName");
-    
+
     // TODO: select, populate 등 필요한 다른 Mongoose 쿼리 옵션 추가 가능
 
     return dbQuery.lean();
@@ -68,4 +60,4 @@ class UserRepository {
   }
 }
 
-export default new UserRepository();
+export default UserRepository;

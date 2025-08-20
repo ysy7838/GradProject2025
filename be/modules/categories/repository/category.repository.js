@@ -1,8 +1,7 @@
 import mongoose from "mongoose";
-import Category from "../../../models/Category.js";
 
 class CategoryRepository {
-  constructor() {
+  constructor(Category) {
     this.Category = Category;
   }
 
@@ -95,4 +94,4 @@ class CategoryRepository {
   }
 }
 
-export default new CategoryRepository();
+export default CategoryRepository;
