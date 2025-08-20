@@ -1,14 +1,16 @@
-import memoRepository from "../repository/memo.repository.js";
-import categoryService from "../../categories/service/category.service.js";
-import tagService from "./tag.service.js";
 import {NotFoundError, InternalServerError} from "../../../utils/customError.js";
 import {MEMO_MESSAGES} from "../../../constants/message.js";
 import {COMMON_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
+import {spawn} from "child_process";
+import path from "path";
+import {fileURLToPath} from "url";
 
 class memoService {
-  constructor() {
+  constructor(memoRepository, tagService, elasticClient) {
     this.memoRepository = memoRepository;
+    this.tagService = tagService;
+    this.elasticClient = elasticClient;
   }
 
   // 메모 권한 체크 헬퍼 함수
@@ -38,10 +40,96 @@ class memoService {
 
     const tagIds = [];
     for (const tagName of tagNames) {
-      const tag = await tagService.findOrCreateTag(tagName);
+      const tag = await this.tagService.findOrCreateTag(tagName);
       tagIds.push(tag._id);
     }
     return tagIds;
+  }
+
+  _runPythonVectorize(memoContent) {
+    return new Promise((resolve, reject) => {
+      // 파이썬 스크립트와 인자를 전달하여 실행
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      const pythonScriptPath = path.join(__dirname, "../../../utils/vectorize.py");
+      const pythonProcess = spawn("python", [pythonScriptPath], {
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      const contentData = {content: memoContent.normalize("NFC")};
+      const jsonString = JSON.stringify(contentData);
+      pythonProcess.stdin.write(jsonString, "utf8");
+      pythonProcess.stdin.end();
+      let output = "";
+      let error = "";
+
+      pythonProcess.stdout.on("data", (data) => {
+        output += data.toString();
+      });
+
+      pythonProcess.stderr.on("data", (data) => {
+        error += data.toString();
+      });
+
+      pythonProcess.on("close", (code) => {
+        if (code !== 0) {
+          return reject(new Error(`Python script exited with code ${code}, error: ${error}`));
+        }
+
+        try {
+          const result = JSON.parse(output);
+          resolve(result);
+        } catch (e) {
+          reject(new Error(`Failed to parse Python output: ${e.message}, stderr: ${error}`));
+        }
+      });
+    });
+  }
+
+  async _saveVectorToElasticsearch(memoId, memoVectors) {
+    const indexName = "memos";
+
+    if (!memoVectors || memoVectors.length === 0) return;
+
+    // 기존 문서 삭제
+    try {
+      await this.elasticClient.deleteByQuery({
+        index: indexName,
+        query: {term: {memoId}},
+      });
+    } catch (err) {
+      if (!(err.meta && err.meta.statusCode === 404)) throw err;
+    }
+
+    const body = [];
+    memoVectors.forEach((vector, i) => {
+      body.push({index: {_index: indexName, _id: `${memoId}_${i}`}});
+      body.push({
+        memoId,
+        sentenceIndex: i,
+        vector,
+        createdAt: new Date(),
+      });
+    });
+
+    const bulkResponse = await this.elasticClient.bulk({refresh: true, body});
+
+    if (bulkResponse.errors) {
+      const erroredDocuments = [];
+      bulkResponse.items.forEach((action, i) => {
+        const op = Object.keys(action)[0];
+        if (action[op].error) {
+          erroredDocuments.push({
+            status: action[op].status,
+            error: action[op].error,
+            operation: body[i * 2],
+            document: body[i * 2 + 1],
+          });
+        }
+      });
+      if (erroredDocuments.length > 0) console.error("Bulk insert errors:", erroredDocuments);
+    }
+
+    console.log(`Memo ${memoId} vectors saved to Elasticsearch (${memoVectors.length} sentences) via bulk.`);
   }
 
   // 생성
@@ -54,7 +142,8 @@ class memoService {
     const dataToCreate = {title, content, categoryId, createdBy, tags: tagIds};
     try {
       const newMemo = await this.memoRepository.create(dataToCreate);
-      await tagService.incrementTagUsage(tagIds);
+      // TODO: 벡터화 및 엘라스틱서치 저장 로직 추가
+      await this.tagService.incrementTagUsage(tagIds);
       return newMemo;
     } catch (error) {
       throw new InternalServerError(COMMON_MESSAGES.CREATION_FAILED);
@@ -85,7 +174,7 @@ class memoService {
 
     if (existingMemo.tags && existingMemo.tags.length > 0) {
       const existingTagIds = existingMemo.tags.map((tag) => tag._id.toString());
-      await tagService.decrementTagUsage(existingTagIds);
+      await this.tagService.decrementTagUsage(existingTagIds);
     }
 
     const newTagIds = await this._processTags(tags);
@@ -102,7 +191,8 @@ class memoService {
       },
     };
     const updatedMemo = await this.memoRepository.updateOne(filter, update);
-    await tagService.incrementTagUsage(newTagIds);
+    // TODO: 벡터화 및 엘라스틱서치 저장 로직 추가
+    await this.tagService.incrementTagUsage(newTagIds);
 
     return updatedMemo;
   }
@@ -170,7 +260,7 @@ class memoService {
     const copiedMemo = await this.memoRepository.create(query);
 
     if (tags && tags.length > 0) {
-      await tagService.incrementTagUsage(tags);
+      await this.tagService.incrementTagUsage(tags);
     }
     return copiedMemo;
   }
@@ -188,7 +278,7 @@ class memoService {
     const result = await this.memoRepository.deleteMany(filter);
 
     if (tagIdsToDecrement.length > 0) {
-      await tagService.decrementTagUsage(tagIdsToDecrement);
+      await this.tagService.decrementTagUsage(tagIdsToDecrement);
     }
 
     return result;
@@ -203,7 +293,7 @@ class memoService {
 
     const result = await this.memoRepository.deleteMany(filter);
     if (tagIdsToDecrement.length > 0) {
-      await tagService.decrementTagUsage(tagIdsToDecrement);
+      await this.tagService.decrementTagUsage(tagIdsToDecrement);
     }
     return result;
   }
@@ -217,12 +307,25 @@ class memoService {
     return memo;
   }
 
-  // 메모 벡터 변환
+  // 메모 벡터 변환 => 메모 생성 / 수정에 합칠 예정
   async convertToVec(memoId) {
     const query = {_id: memoId};
     const memo = await this.memoRepository.findOne(query);
-    // TODO: 중간 처리 과정 필요
-    // 조회 -> 처리
+    if (!memo) {
+      throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
+    }
+    console.log(`Converting memo ${memoId} to vector...`);
+
+    // 파이썬 스크립트 실행 및 벡터 생성
+    const vectorResult = await this._runPythonVectorize(memo.content);
+    if (vectorResult.error) {
+      throw new Error(`Vectorization failed: ${vectorResult.error}`);
+    }
+    // vectorResult 결과 출력
+    console.log(`Vectorization result for memo ${memoId}:`, vectorResult);
+
+    // 엘라스틱서치에 벡터 저장
+    await this._saveVectorToElasticsearch(memo._id, vectorResult.vectors);
     return memo;
   }
 
@@ -239,4 +342,4 @@ class memoService {
   }
 }
 
-export default new memoService();
+export default memoService;
