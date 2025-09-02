@@ -3,9 +3,10 @@ import {CATEGORY_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
 
 class CategoryService {
-  constructor(categoryRepository, memoService) {
+  constructor(categoryRepository, memoService, permissionCheckHelper) {
     this.categoryRepository = categoryRepository;
     this.memoService = memoService;
+    this.permissionCheckHelper = permissionCheckHelper;
   }
 
   async _isTitleExists(title, createdBy, excludeCategoryId = null) {

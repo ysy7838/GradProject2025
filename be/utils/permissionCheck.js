@@ -1,24 +1,24 @@
 import {NotFoundError} from "./customError.js";
 import {CATEGORY_MESSAGES} from "../constants/message.js";
-import categoryRepository from "../modules/categories/repository/category.repository.js";
 
-// 헬퍼 함수
-export const getCategoryAndCheckPermission = async (categoryIdsOrId, createdBy) => {
-  let queryCondition;
-  let categories;
+export const getCategoryAndCheckPermission = (categoryRepository) => {
+  return async (categoryIdsOrId, createdBy) => {
+    let queryCondition;
+    let categories;
 
-  if (Array.isArray(categoryIdsOrId)) {
-    queryCondition = {_id: {$in: categoryIdsOrId}, createdBy};
-    categories = await categoryRepository.findManyByQuery(queryCondition);
-    if (categories.length !== categoryIdsOrId.length) {
-      throw new NotFoundError(CATEGORY_MESSAGES.CATEGORY_NOT_FOUND_OR_NO_PERMISSION);
+    if (Array.isArray(categoryIdsOrId)) {
+      queryCondition = {_id: {$in: categoryIdsOrId}, createdBy};
+      categories = await categoryRepository.findManyByQuery(queryCondition);
+      if (categories.length !== categoryIdsOrId.length) {
+        throw new NotFoundError(CATEGORY_MESSAGES.CATEGORY_NOT_FOUND_OR_NO_PERMISSION);
+      }
+    } else {
+      queryCondition = {_id: categoryIdsOrId, createdBy};
+      categories = await categoryRepository.findOneByQuery(queryCondition);
+      if (!categories) {
+        throw new NotFoundError(CATEGORY_MESSAGES.CATEGORY_NOT_FOUND_OR_NO_PERMISSION);
+      }
     }
-  } else {
-    queryCondition = {_id: categoryIdsOrId, createdBy};
-    categories = await categoryRepository.findOneByQuery(queryCondition);
-    if (!categories) {
-      throw new NotFoundError(CATEGORY_MESSAGES.CATEGORY_NOT_FOUND_OR_NO_PERMISSION);
-    }
-  }
-  return categories;
+    return categories;
+  };
 };

@@ -32,6 +32,7 @@ import UserRoutes from "./modules/users/routes/user.routes.js";
 import MemoRoutes from "./modules/memos/routes/memo.routes.js";
 import FileRoutes from "./modules/memos/routes/file.routes.js";
 import CategoryRoutes from "./modules/categories/routes/category.routes.js";
+import {getCategoryAndCheckPermission} from "./utils/permissionCheck.js";
 
 dotenv.config();
 
@@ -62,21 +63,24 @@ const startServer = async () => {
 
   const elasticClient = getElasticClient();
 
-  // app.js에서 서비스 및 레포지토리 initialization 하도록 수정
+  // app.js에서 initialization 하도록 수정
   const userRepository = new UserRepository(User, Category, Memo);
   const tagRepository = new TagRepository(Tag);
   const memoRepository = new MemoRepository(Memo);
   const categoryRepository = new CategoryRepository(Category);
 
+  // utils
+  const permissionCheckHelper = getCategoryAndCheckPermission(categoryRepository);
+
+  // service, controller 생성
   const userService = new UserService(userRepository);
   const tagService = new TagService(tagRepository);
   const fileService = new FileService(s3Client);
-  const memoService = new MemoService(memoRepository, tagService, elasticClient);
-  const categoryService = new CategoryService(categoryRepository, memoService);
+  const memoService = new MemoService(memoRepository, tagService, elasticClient, permissionCheckHelper);
+  const categoryService = new CategoryService(categoryRepository, memoService, permissionCheckHelper);
 
-  // user, category, memo, file
   const userController = new UserController(userService);
-  const memoController = new MemoController(memoService, tagService, s3Client);
+  const memoController = new MemoController(memoService);
   const fileController = new FileController(fileService);
   const categoryController = new CategoryController(categoryService);
 
