@@ -5,12 +5,14 @@ import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
 import {spawn} from "child_process";
 import path from "path";
 import {fileURLToPath} from "url";
+import axios from "axios";
 
 class memoService {
-  constructor(memoRepository, tagService, elasticClient) {
+  constructor(memoRepository, tagService, elasticClient, permissionCheckHelper) {
     this.memoRepository = memoRepository;
     this.tagService = tagService;
     this.elasticClient = elasticClient;
+    this.permissionCheckHelper = permissionCheckHelper;
   }
 
   // 메모 권한 체크 헬퍼 함수
@@ -314,19 +316,23 @@ class memoService {
     if (!memo) {
       throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
     }
-    console.log(`Converting memo ${memoId} to vector...`);
+    console.log(`Converting memo ${memoId} to vector via FastAPI...`);
 
-    // 파이썬 스크립트 실행 및 벡터 생성
-    const vectorResult = await this._runPythonVectorize(memo.content);
-    if (vectorResult.error) {
-      throw new Error(`Vectorization failed: ${vectorResult.error}`);
+    try {
+      // FastAPI 서버의 벡터화 엔드포인트에 요청
+      const response = await axios.post("http://localhost:8000/vectorize", {
+        content: memo.content,
+      });
+
+      const vectorResult = response.data;
+      console.log(`Vectorization result for memo ${memoId}:`, vectorResult);
+
+      // 엘라스틱서치에 벡터 저장
+      await this._saveVectorToElasticsearch(memo._id, vectorResult.vectors);
+      return memo;
+    } catch (error) {
+      throw new Error(`Vectorization failed: ${error.message}`);
     }
-    // vectorResult 결과 출력
-    console.log(`Vectorization result for memo ${memoId}:`, vectorResult);
-
-    // 엘라스틱서치에 벡터 저장
-    await this._saveVectorToElasticsearch(memo._id, vectorResult.vectors);
-    return memo;
   }
 
   // 요약
