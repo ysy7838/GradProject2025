@@ -48,6 +48,18 @@ class memoService {
     return tagIds;
   }
 
+  // 마크다운을 일반 텍스트로 변환하는 헬퍼 함수
+  async convertMarkdownToText(markdownContent) {
+    if (!markdownContent) {
+      return "";
+    }
+
+    const result = await unified().use(remarkParse).use(stripMarkdown).process(markdownContent);
+
+    return String(result);
+  }
+
+  // 파이썬 스크립트를 사용하여 벡터화 수행
   _runPythonVectorize(memoContent) {
     return new Promise((resolve, reject) => {
       // 파이썬 스크립트와 인자를 전달하여 실행
@@ -87,6 +99,7 @@ class memoService {
     });
   }
 
+  // 엘라스틱서치에 벡터 저장 헬퍼 함수
   async _saveVectorToElasticsearch(memoId, memoVectors) {
     const indexName = "memos";
 
@@ -300,12 +313,23 @@ class memoService {
     return result;
   }
 
-  // 해시태그 자동 생성 => 추가 필요
+  // 해시태그 자동 생성 => 메모 생성 시 모달을 띄워 물어본 후 생성
   async makeHashtags(memoId) {
     const query = {_id: memoId};
-    const memo = await this.memoRepository.findOne(query);
+    const memo = await this.memoRepository.findOne(query); // content만 필요
     // TODO: 중간 처리 과정 필요
-    // 조회 -> 처리
+
+    // 없는 경우 에러 처리
+
+    // markdown -> text 변환 로직 추가 필요
+    const plainText = await this.convertMarkdownToText(memo.content);
+
+    // 제미나이 요청 api 로직 -> 프론트에서는 로딩 화면 띄우기
+    // 나온 결과 유효성 검사 -> 해당 로직에서 직접 진행
+    const tags = [];
+
+    // 클라이언트로 반환 -> 이후 사용자가 수락하면 메모 수정으로 태그 추가
+
     return memo;
   }
 
