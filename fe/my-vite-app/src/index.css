@@ -23,11 +23,13 @@ a:hover {
 }
 
 body {
-  margin: 0;
+  margin: 0 auto;
   display: flex;
   place-items: center;
   min-width: 320px;
+  max-width: 28.125rem;
   min-height: 100vh;
+  background-color: #ffffff;
 }
 
 h1 {
@@ -54,10 +56,17 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* PC 화면에선 1rem = 18px로 더 크게 설정 */
+@media (min-width: 768px) {
+  html {
+    font-size: 18px; 
+  }
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
-    background-color: #ffffff;
+    background-color: #aaaaaa;
   }
   a:hover {
     color: #747bff;
@@ -65,4 +74,16 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+/* 페이지 전체의 최대 너비를 rem 단위로 제한 */
+.container {
+  max-width: 25rem; /* 25rem은 기본 400px, 768px 이상에서 450px */
+  margin: 0 auto;
+}
+
+/* 폰트 크기나 패딩 등을 rem으로 설정 */
+.title {
+  font-size: 1.5rem; /* 1.5rem */
+  padding: 1rem;
 }
