@@ -1,4 +1,4 @@
-import {NotFoundError, InternalServerError} from "../../../utils/customError.js";
+import {NotFoundError, InternalServerError, BadRequestError} from "../../../utils/customError.js";
 import {MEMO_MESSAGES} from "../../../constants/message.js";
 import {COMMON_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
@@ -6,6 +6,7 @@ import {spawn} from "child_process";
 import path from "path";
 import {fileURLToPath} from "url";
 import axios from "axios";
+import GeminiService from "./gemini.service.js";
 
 class memoService {
   constructor(memoRepository, tagService, elasticClient, permissionCheckHelper) {
@@ -13,9 +14,195 @@ class memoService {
     this.tagService = tagService;
     this.elasticClient = elasticClient;
     this.permissionCheckHelper = permissionCheckHelper;
+    this.geminiService = new GeminiService();
   }
 
-  // 메모 권한 체크 헬퍼 함수
+  // 기존 메서드들...
+  // (createMemo, getMemoList, updateMemo 등 기존 메서드들은 그대로 유지)
+
+  /**
+   * 텍스트 요약 - Gemini AI 사용
+   */
+  async summarizeText(data) {
+    try {
+      const { content, options = {} } = data;
+
+      if (!content || typeof content !== 'string') {
+        throw new BadRequestError("요약할 텍스트 내용이 제공되지 않았습니다.");
+      }
+
+      // 기본 옵션 설정
+      const summaryOptions = {
+        language: options.language || "ko",
+        style: options.style || "brief", // brief, detailed
+        focus: options.focus || "general" // general, key_points, summary
+      };
+
+      const result = await this.geminiService.summarizeText(content, summaryOptions);
+      
+      return {
+        success: true,
+        summary: result.summary,
+        originalLength: result.originalLength,
+        summaryLength: result.summaryLength,
+        type: "text",
+        timestamp: result.timestamp,
+        options: summaryOptions
+      };
+
+    } catch (error) {
+      console.error("Text summarization error:", error);
+      
+      if (error instanceof BadRequestError) {
+        throw error;
+      }
+      
+      throw new InternalServerError("텍스트 요약 처리 중 오류가 발생했습니다.");
+    }
+  }
+
+  /**
+   * 이미지 요약 - Gemini Vision AI 사용
+   */
+  async summarizeImage(data) {
+    try {
+      const { imageData, options = {} } = data;
+
+      if (!imageData) {
+        throw new BadRequestError("요약할 이미지 데이터가 제공되지 않았습니다.");
+      }
+
+      // 이미지 데이터 형식 검증
+      if (!imageData.data || !imageData.mimeType) {
+        throw new BadRequestError("이미지 데이터 형식이 올바르지 않습니다. data와 mimeType이 필요합니다.");
+      }
+
+      // 지원하는 이미지 형식 검증
+      const supportedMimeTypes = [
+        'image/jpeg', 'image/jpg', 'image/png', 
+        'image/gif', 'image/webp', 'image/bmp'
+      ];
+      
+      if (!supportedMimeTypes.includes(imageData.mimeType.toLowerCase())) {
+        throw new BadRequestError("지원하지 않는 이미지 형식입니다. JPEG, PNG, GIF, WebP, BMP만 지원됩니다.");
+      }
+
+      // 기본 옵션 설정
+      const summaryOptions = {
+        language: options.language || "ko",
+        style: options.style || "descriptive", // descriptive, analytical
+        focus: options.focus || "content" // content, text, objects
+      };
+
+      const result = await this.geminiService.summarizeImage(imageData, summaryOptions);
+      
+      return {
+        success: true,
+        summary: result.summary,
+        imageType: result.imageType,
+        summaryLength: result.summaryLength,
+        type: "image",
+        timestamp: result.timestamp,
+        options: summaryOptions
+      };
+
+    } catch (error) {
+      console.error("Image summarization error:", error);
+      
+      if (error instanceof BadRequestError) {
+        throw error;
+      }
+      
+      throw new InternalServerError("이미지 요약 처리 중 오류가 발생했습니다.");
+    }
+  }
+
+  /**
+   * 다중 이미지 요약 (이미지 그룹용)
+   */
+  async summarizeMultipleImages(data) {
+    try {
+      const { imageDataArray, options = {} } = data;
+
+      if (!Array.isArray(imageDataArray) || imageDataArray.length === 0) {
+        throw new BadRequestError("요약할 이미지 배열이 제공되지 않았습니다.");
+      }
+
+      if (imageDataArray.length > 5) {
+        throw new BadRequestError("한번에 최대 5개의 이미지만 처리할 수 있습니다.");
+      }
+
+      // 각 이미지 데이터 검증
+      for (let i = 0; i < imageDataArray.length; i++) {
+        const imageData = imageDataArray[i];
+        if (!imageData.data || !imageData.mimeType) {
+          throw new BadRequestError(`이미지 ${i + 1}의 데이터 형식이 올바르지 않습니다.`);
+        }
+      }
+
+      const result = await this.geminiService.summarizeMultipleImages(imageDataArray, options);
+      
+      return {
+        success: true,
+        summary: result.summary,
+        imageCount: result.imageCount,
+        summaryLength: result.summaryLength,
+        type: "multiple_images",
+        timestamp: result.timestamp
+      };
+
+    } catch (error) {
+      console.error("Multiple images summarization error:", error);
+      
+      if (error instanceof BadRequestError) {
+        throw error;
+      }
+      
+      throw new InternalServerError("다중 이미지 요약 처리 중 오류가 발생했습니다.");
+    }
+  }
+
+  /**
+   * 메모 내 텍스트 요약 (기존 메모의 content 요약)
+   */
+  async summarizeMemoText(data) {
+    try {
+      const { memoId, createdBy, options = {} } = data;
+
+      // 메모 조회 및 권한 확인
+      const memo = await this._getMemoAndCheckPermission(memoId, createdBy);
+
+      if (!memo.content || memo.content.trim().length === 0) {
+        throw new BadRequestError("요약할 메모 내용이 없습니다.");
+      }
+
+      // 텍스트 요약 실행
+      const summaryResult = await this.summarizeText({
+        content: memo.content,
+        options
+      });
+
+      return {
+        ...summaryResult,
+        memoInfo: {
+          id: memo._id,
+          title: memo.title,
+          originalContent: memo.content
+        }
+      };
+
+    } catch (error) {
+      console.error("Memo text summarization error:", error);
+      
+      if (error instanceof BadRequestError || error instanceof NotFoundError) {
+        throw error;
+      }
+      
+      throw new InternalServerError("메모 텍스트 요약 중 오류가 발생했습니다.");
+    }
+  }
+
+  // 권한 확인 헬퍼 메서드 (기존 코드에서 가져옴)
   async _getMemoAndCheckPermission(memoIdsOrId, createdBy) {
     let queryCondition;
     let memos;
@@ -36,6 +223,7 @@ class memoService {
     return memos;
   }
 
+<<<<<<< Updated upstream
   // 태그 처리 헬퍼 함수
   async _processTags(tagNames) {
     if (!tagNames || tagNames.length === 0) return [];
@@ -370,6 +558,9 @@ class memoService {
     const result = "";
     return result;
   }
+=======
+  // ... 기존 메서드들 (createMemo, getMemoList, updateMemo 등)
+>>>>>>> Stashed changes
 }
 
 export default memoService;

@@ -97,6 +97,12 @@ export const MEMO_MESSAGES = {
   CONVERT_TO_VEC_SUCCESS: "메모가 벡터로 성공적으로 변환되었습니다.",
   SUMMARIZE_TEXT_SUCCESS: "텍스트 요약이 성공적으로 완료되었습니다.",
   SUMMARIZE_IMAGE_SUCCESS: "이미지 요약이 성공적으로 완료되었습니다.",
+  
+  // Gemini AI 요약 관련 메시지
+  SUMMARIZE_MEMO_SUCCESS: "메모 요약이 성공적으로 생성되었습니다.",
+  SUMMARIZE_CATEGORY_SUCCESS: "카테고리 메모 요약이 성공적으로 생성되었습니다.",
+  SUMMARIZE_TAG_SUCCESS: "태그별 메모 요약이 성공적으로 생성되었습니다.",
+  SUMMARIZE_FAVORITES_SUCCESS: "즐겨찾기 메모 요약이 성공적으로 생성되었습니다.",
 
   // invalid 에러
   INVALID_TITLE_LENGTH: "제목은 100자 이하로 입력해주세요.",
@@ -104,6 +110,8 @@ export const MEMO_MESSAGES = {
   INVALID_FAV_STATUS: "즐겨찾기 상태 값이 올바르지 않습니다.",
   INVALID_MEMO_ID: "유효하지 않은 메모 ID입니다.",
   INVALID_CATEGORY_ID: "유효하지 않은 카테고리 ID입니다.",
+  INVALID_SUMMARY_TYPE: "요약 타입이 올바르지 않습니다.",
+  INVALID_LIMIT_VALUE: "제한 개수 값이 올바르지 않습니다.",
 
   // 에러 메시지
   MEMO_NOT_FOUND_OR_NO_PERMISSION: "메모를 찾을 수 없거나 접근 권한이 없습니다.",
@@ -111,6 +119,15 @@ export const MEMO_MESSAGES = {
   FAVORITE_ALREADY_EXISTS: "이미 즐겨찾기에 추가된 메모입니다.",
   FAVORITE_NOT_FOUND: "즐겨찾기에서 해당 메모를 찾을 수 없습니다.",
   CANNOT_DELETE_NON_EXISTENT_FAVORITE: "존재하지 않는 즐겨찾기를 삭제할 수 없습니다.",
+  
+  // 요약 관련 에러 메시지
+  CONTENT_TOO_SHORT_FOR_SUMMARY: "요약할 내용이 너무 짧습니다.",
+  CONTENT_TOO_LONG_FOR_SUMMARY: "요약할 내용이 너무 깁니다.",
+  NO_CONTENT_TO_SUMMARIZE: "요약할 내용이 없습니다.",
+  NO_MEMOS_FOUND_FOR_SUMMARY: "요약할 메모를 찾을 수 없습니다.",
+  GEMINI_API_ERROR: "AI 요약 서비스에 문제가 발생했습니다.",
+  GEMINI_API_KEY_ERROR: "AI 서비스 API 키가 설정되지 않았습니다.",
+  GEMINI_QUOTA_EXCEEDED: "AI 서비스 할당량을 초과했습니다.",
 };
 
 export const TAG_MESSAGES = {
