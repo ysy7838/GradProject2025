@@ -46,7 +46,7 @@ class GeminiService {
   /**
    * 텍스트 요약 생성
    */
-  async summarizeText(content, options = {}) {
+  async summarizeText(content) {
     try {
       // 마크다운을 평문으로 변환
       const plainText = this._convertMarkdownToText(content);
@@ -55,7 +55,7 @@ class GeminiService {
       this._validateTextLength(plainText);
 
       // 요약 프롬프트 생성
-      const prompt = this._generateTextPrompt(plainText, options);
+  const prompt = this._generateTextPrompt(plainText);
 
       // Gemini API 호출
       const result = await this.textModel.generateContent(prompt);
@@ -93,7 +93,7 @@ class GeminiService {
   /**
    * 이미지 요약 생성
    */
-  async summarizeImage(imageData, options = {}) {
+  async summarizeImage(imageData) {
     try {
       // 이미지 데이터 검증
       if (!imageData || !imageData.data) {
@@ -101,7 +101,7 @@ class GeminiService {
       }
 
       // 프롬프트 생성
-      const prompt = this._generateImagePrompt(options);
+  const prompt = this._generateImagePrompt();
 
       // 이미지 객체 준비
       const imagePart = {
@@ -147,61 +147,22 @@ class GeminiService {
   /**
    * 텍스트 요약을 위한 프롬프트 생성
    */
-  _generateTextPrompt(text, options = {}) {
-    const {
-      language = "ko",
-      style = "brief", // brief, detailed
-      focus = "general" // general, key_points, summary
-    } = options;
-
-    let instruction = "다음 텍스트를 한국어로 요약해주세요.";
-    
-    if (style === "detailed") {
-      instruction += " 주요 내용과 핵심 포인트를 포함하여 상세히 요약해주세요.";
-    } else {
-      instruction += " 핵심 내용만 간단하고 명확하게 요약해주세요.";
-    }
-
-    if (focus === "key_points") {
-      instruction += " 특히 중요한 키워드와 핵심 개념을 중심으로 정리해주세요.";
-    }
-    
+  _generateTextPrompt(text) {
+    let instruction = "다음 텍스트를 한국어로 요약해주세요. 핵심 내용만 간단하고 명확하게 요약해주세요.";
     return `${instruction}\n\n텍스트:\n${text}`;
   }
 
   /**
    * 이미지 요약을 위한 프롬프트 생성
    */
-  _generateImagePrompt(options = {}) {
-    const {
-      language = "ko",
-      style = "descriptive", // descriptive, analytical
-      focus = "content" // content, text, objects
-    } = options;
-
-    let instruction = "이 이미지를 한국어로 분석하고 요약해주세요.";
-    
-    if (focus === "text") {
-      instruction += " 특히 이미지에 포함된 텍스트나 문자 내용을 중심으로 설명해주세요.";
-    } else if (focus === "objects") {
-      instruction += " 이미지에 나타난 주요 객체나 요소들을 중심으로 설명해주세요.";
-    } else {
-      instruction += " 이미지의 전반적인 내용, 주요 요소, 중요한 정보를 포괄적으로 설명해주세요.";
-    }
-
-    if (style === "analytical") {
-      instruction += " 분석적이고 구체적으로 설명해주세요.";
-    } else {
-      instruction += " 명확하고 이해하기 쉽게 설명해주세요.";
-    }
-    
-    return instruction;
+  _generateImagePrompt() {
+    return "이 이미지를 한국어로 분석하고 요약해주세요. 이미지의 전반적인 내용, 주요 요소, 중요한 정보를 명확하고 이해하기 쉽게 설명해주세요.";
   }
 
   /**
    * 다중 이미지 요약 (이미지 그룹용)
    */
-  async summarizeMultipleImages(imageDataArray, options = {}) {
+  async summarizeMultipleImages(imageDataArray) {
     try {
       if (!Array.isArray(imageDataArray) || imageDataArray.length === 0) {
         throw new BadRequestError("이미지 데이터 배열이 제공되지 않았습니다.");

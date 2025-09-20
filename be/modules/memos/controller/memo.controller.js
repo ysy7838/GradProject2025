@@ -35,11 +35,9 @@ class MemoController {
    * 텍스트 요약
    */
   async summarizeText(req, res) {
-    const { content, options = {} } = req.body;
-    
-    const data = { content, options };
+    const { content } = req.body;
+    const data = { content };
     const result = await this.memoService.summarizeText(data);
-    
     res.status(200).json({
       message: MEMO_MESSAGES.SUMMARIZE_TEXT_SUCCESS,
       result: result,
@@ -51,11 +49,9 @@ class MemoController {
    * 이미지 요약 (단일 이미지)
    */
   async summarizeImage(req, res) {
-    const { imageData, options = {} } = req.body;
-    
-    const data = { imageData, options };
+    const { imageData } = req.body;
+    const data = { imageData };
     const result = await this.memoService.summarizeImage(data);
-    
     res.status(200).json({
       message: MEMO_MESSAGES.SUMMARIZE_IMAGE_SUCCESS,
       result: result,
@@ -68,12 +64,9 @@ class MemoController {
    */
   async summarizeMemoText(req, res) {
     const { memoId } = req.params;
-    const { options = {} } = req.body;
     const createdBy = req.user.id;
-    
-    const data = { memoId, createdBy, options };
+    const data = { memoId, createdBy };
     const result = await this.memoService.summarizeMemoText(data);
-    
     res.status(200).json({
       message: "메모 텍스트 요약이 성공적으로 생성되었습니다.",
       result: result,
@@ -85,11 +78,9 @@ class MemoController {
    * 다중 이미지 요약
    */
   async summarizeMultipleImages(req, res) {
-    const { imageDataArray, options = {} } = req.body;
-    
-    const data = { imageDataArray, options };
+    const { imageDataArray } = req.body;
+    const data = { imageDataArray };
     const result = await this.memoService.summarizeMultipleImages(data);
-    
     res.status(200).json({
       message: "다중 이미지 요약이 성공적으로 생성되었습니다.",
       result: result,
@@ -115,11 +106,8 @@ class MemoController {
         mimeType: req.file.mimetype
       };
 
-      const options = req.body.options ? JSON.parse(req.body.options) : {};
-      
-      const data = { imageData, options };
+      const data = { imageData };
       const result = await this.memoService.summarizeImage(data);
-      
       res.status(200).json({
         message: MEMO_MESSAGES.SUMMARIZE_IMAGE_SUCCESS,
         result: result,

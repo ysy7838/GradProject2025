@@ -58,14 +58,8 @@ export default (memoController) => {
   // 텍스트 요약
   router.post("/ai/text", authenticate, validateSummarizeText, memoController.summarizeText);
 
-  // 이미지 요약 (JSON 형태)
-  router.post("/ai/image", authenticate, validateSummarizeImage, memoController.summarizeImage);
-
   // 이미지 요약 (파일 업로드)
   router.post("/ai/image/upload", authenticate, upload.single('image'), memoController.summarizeImageUpload);
-
-  // 다중 이미지 요약
-  router.post("/ai/images", authenticate, memoController.summarizeMultipleImages);
 
   // ===== 기타 기존 API =====
 

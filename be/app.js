@@ -22,6 +22,7 @@ import FileService from "./modules/memos/service/file.service.js";
 import TagService from "./modules/memos/service/tag.service.js";
 import MemoService from "./modules/memos/service/memo.service.js";
 import CategoryService from "./modules/categories/service/category.service.js";
+import GeminiService from "./modules/memos/service/gemini.service.js";
 
 import UserController from "./modules/users/controller/user.controller.js";
 import MemoController from "./modules/memos/controller/memo.controller.js";
@@ -76,7 +77,8 @@ const startServer = async () => {
   const userService = new UserService(userRepository);
   const tagService = new TagService(tagRepository);
   const fileService = new FileService(s3Client);
-  const memoService = new MemoService(memoRepository, tagService, elasticClient, permissionCheckHelper);
+  const geminiService = new GeminiService();
+  const memoService = new MemoService(memoRepository, tagService, elasticClient, permissionCheckHelper, geminiService);
   const categoryService = new CategoryService(categoryRepository, memoService, permissionCheckHelper);
 
   const userController = new UserController(userService);
