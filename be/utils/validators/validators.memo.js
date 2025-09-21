@@ -1,6 +1,6 @@
 import {check} from "express-validator";
 import {validateMiddleware, validateObjectId, validateObjectIdArray} from "./validators.common.js";
-import {MEMO_MESSAGES} from "../../constants/message.js";
+import {MEMO_MESSAGES, TAG_MESSAGES} from "../../constants/message.js";
 import {validateTags} from "./validators.tag.js";
 
 // API 스펙에 맞춘 필드명 사용
@@ -23,7 +23,7 @@ export const validateCollectionId = check("collectionId")
   .isMongoId()
   .withMessage("유효하지 않은 컬렉션 ID입니다.");
 
-// keywords (쉼표로 구분된 문자열, 각 키워드는 최대 15자)
+// keywords (tag validation과 동일한 규칙 적용)
 export const validateKeywords = check("keywords")
   .optional()
   .isString()
@@ -31,12 +31,13 @@ export const validateKeywords = check("keywords")
   .custom((value) => {
     if (value) {
       const keywords = value.split(',').map(k => k.trim());
+      // tag validation과 동일한 규칙 적용 (최대 5개, 각 15자)
       if (keywords.length > 5) {
-        throw new Error("키워드는 최대 5개까지 입력 가능합니다.");
+        throw new Error(TAG_MESSAGES.TAG_LIMIT_EXCEEDED);
       }
       for (const keyword of keywords) {
-        if (keyword.length > 15) {
-          throw new Error("각 키워드는 최대 15자까지 입력 가능합니다.");
+        if (keyword.length < 1 || keyword.length > 15) {
+          throw new Error(TAG_MESSAGES.INVALID_TAG_FORMAT);
         }
       }
     }
@@ -81,8 +82,8 @@ export const validateGetMemo = [validateMemoId, validateMiddleware];
 
 export const validateUpdateMemo = [
   validateMemoId,
-  check("title").optional().trim().isLength({min: 1, max: 20}).withMessage("제목은 1~20자 사이로 입력해주세요."),
-  check("memo").optional().isString().withMessage(MEMO_MESSAGES.INVALID_CONTENT_TYPE).isLength({max: 500}).withMessage("메모 내용은 최대 500자까지 입력 가능합니다."),
+  validateTitle.optional(),
+  validateMemoContent,
   validateKeywords,
   validateLinks,
   validateMiddleware

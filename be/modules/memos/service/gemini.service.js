@@ -3,6 +3,7 @@ import { ExternalServiceError, BadRequestError } from "../../../utils/customErro
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import stripMarkdown from "strip-markdown";
+import remarkStringify from "remark-stringify";
 
 class GeminiService {
   constructor() {
@@ -14,16 +15,18 @@ class GeminiService {
   /**
    * 마크다운 텍스트를 평문으로 변환
    */
-  _convertMarkdownToText(markdownContent) {
+  async _convertMarkdownToText(markdownContent) {
     try {
-      const result = unified()
+      const result = await unified()
         .use(remarkParse)
         .use(stripMarkdown)
-        .processSync(markdownContent);
+        .use(remarkStringify)  // compiler 추가
+        .process(markdownContent);
       return result.toString().trim();
     } catch (error) {
       console.error("Markdown conversion error:", error);
-      return markdownContent; // 변환 실패 시 원본 반환
+      // 변환 실패 시 원본 반환
+      return markdownContent; 
     }
   }
 
@@ -48,14 +51,14 @@ class GeminiService {
    */
   async summarizeText(content) {
     try {
-      // 마크다운을 평문으로 변환
-      const plainText = this._convertMarkdownToText(content);
+      // 마크다운을 평문으로 변환 (async로 변경)
+      const plainText = await this._convertMarkdownToText(content);
       
       // 텍스트 길이 검증
       this._validateTextLength(plainText);
 
       // 요약 프롬프트 생성
-  const prompt = this._generateTextPrompt(plainText);
+      const prompt = this._generateTextPrompt(plainText);
 
       // Gemini API 호출
       const result = await this.textModel.generateContent(prompt);
@@ -101,7 +104,7 @@ class GeminiService {
       }
 
       // 프롬프트 생성
-  const prompt = this._generateImagePrompt();
+      const prompt = this._generateImagePrompt();
 
       // 이미지 객체 준비
       const imagePart = {
@@ -148,7 +151,7 @@ class GeminiService {
    * 텍스트 요약을 위한 프롬프트 생성
    */
   _generateTextPrompt(text) {
-    let instruction = "다음 텍스트를 한국어로 요약해주세요. 핵심 내용만 간단하고 명확하게 요약해주세요.";
+    let instruction = "다음 글을 간결하게 요약해주세요. 글머리 기호 없이 자연스러운 문장으로 작성하고, ~했다/~하다 형태로 써주세요.";
     return `${instruction}\n\n텍스트:\n${text}`;
   }
 
@@ -156,7 +159,7 @@ class GeminiService {
    * 이미지 요약을 위한 프롬프트 생성
    */
   _generateImagePrompt() {
-    return "이 이미지를 한국어로 분석하고 요약해주세요. 이미지의 전반적인 내용, 주요 요소, 중요한 정보를 명확하고 이해하기 쉽게 설명해주세요.";
+    return "이 이미지를 간결하게 요약해주세요. 글머리 기호 없이 자연스러운 문장으로 작성하고, ~했다/~하다 형태로 써주세요.";
   }
 
   /**
@@ -168,7 +171,7 @@ class GeminiService {
         throw new BadRequestError("이미지 데이터 배열이 제공되지 않았습니다.");
       }
 
-      const prompt = "다음 이미지들을 종합적으로 분석하고 한국어로 요약해주세요. 각 이미지의 내용과 전체적인 맥락을 설명해주세요.";
+      const prompt = "이 이미지를 간결하게 요약해주세요. 글머리 기호 없이 자연스러운 문장으로 작성하고, ~했다/~하다 형태로 써주세요. 이미지 간의 연관성을 고려하여 전체적인 내용을 요약해주세요.";
 
       // 이미지 파트 배열 준비
       const imageParts = imageDataArray.map(imageData => ({

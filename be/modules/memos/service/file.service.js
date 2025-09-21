@@ -58,6 +58,60 @@ class FileService {
     const presignedUrl = await this._createPresignedUrl(command);
     return presignedUrl;
   }
+
+  /**
+   * 이미지를 직접 S3에 업로드
+   * @param {Object} data - buffer, key, contentType, userId
+   * @returns {Promise<string>} S3 URL
+   */
+  async uploadImageToS3(data) {
+    const {buffer, key, contentType, userId} = data;
+    const bucketName = process.env.S3_BUCKET_NAME;
+    
+    try {
+      const command = new PutObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        Metadata: {
+          userId: userId.toString(),
+          uploadDate: new Date().toISOString()
+        }
+      });
+
+      await this.s3Client.send(command);
+      
+      // 환경변수의 S3_BASE_URL 사용
+      const baseUrl = process.env.S3_BASE_URL || `https://${bucketName}.s3.${process.env.S3_REGION}.amazonaws.com`;
+      return `${baseUrl}/${key}`;
+      
+    } catch (error) {
+      console.error("S3 upload error:", error);
+      throw new ExternalServiceError("이미지 업로드 중 오류가 발생했습니다.");
+    }
+  }
+
+  /**
+   * S3에서 이미지 삭제
+   */
+  async deleteImageFromS3(key) {
+    const bucketName = process.env.S3_BUCKET_NAME;
+    
+    try {
+      const command = new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: key
+      });
+
+      await this.s3Client.send(command);
+      return true;
+      
+    } catch (error) {
+      console.error("S3 delete error:", error);
+      throw new ExternalServiceError("이미지 삭제 중 오류가 발생했습니다.");
+    }
+  }
 }
 
 export default FileService;

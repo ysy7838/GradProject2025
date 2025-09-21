@@ -3,24 +3,22 @@ import {MEMO_MESSAGES} from "../../../constants/message.js";
 import multer from "multer";
 
 class MemoController {
-  constructor(memoService) {
+  constructor(memoService, fileService) {
     this.memoService = memoService;
+    this.fileService = fileService;
 
-    // 기존 메서드들...
     this.createMemo = asyncHandler(this.createMemo.bind(this));
     this.getMemoList = asyncHandler(this.getMemoList.bind(this));
     this.updateMemoFav = asyncHandler(this.updateMemoFav.bind(this));
     this.moveMemos = asyncHandler(this.moveMemos.bind(this));
     this.deleteMemos = asyncHandler(this.deleteMemos.bind(this));
 
-    // 간소화된 요약 메서드들
     this.summarizeText = asyncHandler(this.summarizeText.bind(this));
     this.summarizeImage = asyncHandler(this.summarizeImage.bind(this));
     this.summarizeMemoText = asyncHandler(this.summarizeMemoText.bind(this));
     this.summarizeMultipleImages = asyncHandler(this.summarizeMultipleImages.bind(this));
     this.summarizeImageUpload = asyncHandler(this.summarizeImageUpload.bind(this));
 
-    // 기타 기존 메서드들...
     this.getMemoDetail = asyncHandler(this.getMemoDetail.bind(this));
     this.updateMemo = asyncHandler(this.updateMemo.bind(this));
     this.copyMemo = asyncHandler(this.copyMemo.bind(this));
@@ -28,12 +26,7 @@ class MemoController {
     this.convertToVec = asyncHandler(this.convertToVec.bind(this));
   }
 
-  // 기존 메서드들은 그대로 유지...
-
-  /**
-   * POST /api/memos/ai/text
-   * 텍스트 요약
-   */
+  /* POST /api/memos/ai/text :텍스트 요약 */
   async summarizeText(req, res) {
     const { content } = req.body;
     const data = { content };
@@ -44,10 +37,7 @@ class MemoController {
     });
   }
 
-  /**
-   * POST /api/memos/ai/image
-   * 이미지 요약 (단일 이미지)
-   */
+  /* POST /api/memos/ai/image :이미지 요약 (단일 이미지) */
   async summarizeImage(req, res) {
     const { imageData } = req.body;
     const data = { imageData };
@@ -58,10 +48,7 @@ class MemoController {
     });
   }
 
-  /**
-   * POST /api/memos/:memoId/ai/text
-   * 특정 메모의 텍스트 요약
-   */
+  /* POST /api/memos/:memoId/ai/text :텍스트 및 이미지 통합요약 */
   async summarizeMemoText(req, res) {
     const { memoId } = req.params;
     const createdBy = req.user.id;
@@ -73,10 +60,7 @@ class MemoController {
     });
   }
 
-  /**
-   * POST /api/memos/ai/images
-   * 다중 이미지 요약
-   */
+  /* POST /api/memos/ai/images :다중 이미지 요약 */
   async summarizeMultipleImages(req, res) {
     const { imageDataArray } = req.body;
     const data = { imageDataArray };
@@ -87,10 +71,9 @@ class MemoController {
     });
   }
 
-  // 파일 업로드를 통한 이미지 요약 (multipart/form-data)
   /**
    * POST /api/memos/ai/image/upload
-   * 파일 업로드를 통한 이미지 요약
+   * 이미지를 S3에 업로드하고 요약 생성
    */
   async summarizeImageUpload(req, res) {
     try {
@@ -100,28 +83,54 @@ class MemoController {
         });
       }
 
-      // 업로드된 파일을 base64로 변환
+      const { memoId } = req.body; // 메모 ID (선택적)
+      const createdBy = req.user.id;
+
+      // 1. S3에 이미지 업로드
+      const timestamp = Date.now();
+      const fileName = `${timestamp}-${req.file.originalname}`;
+      const s3Key = `images/${createdBy}/${fileName}`;
+
+      const uploadData = {
+        buffer: req.file.buffer,
+        key: s3Key,
+        contentType: req.file.mimetype,
+        userId: createdBy
+      };
+
+      const s3Url = await this.fileService.uploadImageToS3(uploadData);
+
+      // 2. 이미지를 base64로 변환하여 요약 생성
       const imageData = {
         data: req.file.buffer.toString('base64'),
         mimeType: req.file.mimetype
       };
 
-      const data = { imageData };
-      const result = await this.memoService.summarizeImage(data);
+      const summaryData = {
+        imageData,
+        s3Url,
+        memoId,
+        createdBy
+      };
+
+      const result = await this.memoService.summarizeImageWithS3(summaryData);
+
       res.status(200).json({
         message: MEMO_MESSAGES.SUMMARIZE_IMAGE_SUCCESS,
-        result: result,
+        result: {
+          ...result,
+          imageUrl: s3Url // S3 URL 포함
+        }
       });
 
     } catch (error) {
       console.error("Image upload summarization error:", error);
       res.status(500).json({
-        error: "이미지 업로드 요약 중 오류가 발생했습니다."
+        error: "이미지 업로드 및 요약 중 오류가 발생했습니다."
       });
     }
   }
 
-  // 기존 메서드들...
   async createMemo(req, res) {
     const {title, content, categoryId, tags} = req.body;
     const createdBy = req.user.id;

@@ -17,18 +17,26 @@ import {
   validateSummarizeMemoText,
 } from "../../../utils/validators/validators.memo.summary.js";
 
-// Multer 설정 (이미지 업로드용)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB 제한
+    fileSize: 10 * 1024 * 1024, // 10MB로 증가
   },
   fileFilter: (req, file, cb) => {
-    // 이미지 파일만 허용
-    if (file.mimetype.startsWith('image/')) {
+    // 지원하는 이미지 형식
+    const allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp'
+    ];
+    
+    if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('이미지 파일만 업로드 가능합니다.'), false);
+      cb(new Error('지원하지 않는 이미지 형식입니다.'), false);
     }
   }
 });
@@ -36,7 +44,13 @@ const upload = multer({
 export default (memoController) => {
   const router = Router();
 
-  // ===== 기존 메모 관리 API =====
+  // 이미지 업로드 + 요약 (S3 저장 포함)
+  router.post(
+    "/ai/image/upload", 
+    authenticate, 
+    upload.single('image'), 
+    memoController.summarizeImageUpload
+  );
 
   // 메모 생성
   router.post("/", authenticate, validateCreateMemo, memoController.createMemo);

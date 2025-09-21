@@ -22,11 +22,24 @@ const MemoSchema = new Schema(
         ref: "Tag",
       },
     ],
+    // 이미지 필드 추가
+    images: [
+      {
+        url: String,
+        summary: String,
+        uploadedAt: Date,
+        metadata: {
+          size: Number,
+          mimeType: String,
+          originalName: String
+        }
+      }
+    ]
   },
   {
     timestamps: true,
     versionKey: "__v",
-    optimisticConcurrency: true, // 데이터 충돌 방지 활성화
+    optimisticConcurrency: true,
   }
 );
 
