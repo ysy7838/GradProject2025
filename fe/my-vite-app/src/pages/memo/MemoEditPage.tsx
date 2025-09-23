@@ -2,7 +2,7 @@
 import React, {useState, useEffect, useRef, useCallback} from "react";
 import {useNavigate, useParams} from "react-router-dom";
 import {useToast} from "@/contexts/useToast";
-import KeywordInput from "@/components/reference/KeywordInput";
+import KeywordInput from "@/components/memo/KeywordInput";
 import Header, {HeaderAction} from "@/components/layout/Header";
 import Modal from "@/components/common/Modal"; // Modal 컴포넌트 import
 import {getMemo, updateMemo, MemoRequest, deleteMemo} from "@/services/memo";
