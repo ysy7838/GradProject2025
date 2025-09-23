@@ -177,14 +177,19 @@ export default function MemoDetailPage() {
   // 관련 메모 추천 핸들러
   const handleGetRecommendedMemos = async () => {
     if (!id) return;
-
+    if (recommendedMemos.length > 0) {
+      setShowRecommendedMemos(true);
+      return;
+    }
+    // 데이터가 없을 때만 API를 호출합니다.
     try {
       setIsRecommending(true);
+      setShowRecommendedMemos(true);
       const memos = await getRecommendedMemos(id);
       setRecommendedMemos(memos);
-      setShowRecommendedMemos(true);
     } catch (error) {
       showToast("관련 메모를 불러오는데 실패했습니다.", "error");
+      setShowRecommendedMemos(false);
     } finally {
       setIsRecommending(false);
     }
