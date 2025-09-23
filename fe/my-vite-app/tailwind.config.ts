@@ -13,7 +13,7 @@ const config: Config = {
           DEFAULT: "#1ABC9C", // 기본 primary 색상
           dark: "#16a085", // 조금 더 어두운 버전 (hover 시 사용)
           light: "#A3E4D7", // 조금 더 밝은 버전 (disabled, secondary 등에 사용)
-          0: "#A3E4D7", // 조금 더 밝은 버전 (disabled, secondary 등에
+          0: "#CDE9E6", // 조금 더 밝은 버전 (disabled, secondary 등에
           100: "#1ABC9C", // 기본 primary 색상
           200: "#16a085", // 조금 더 어두운 버전 (hover 시 사용)
         },
@@ -36,6 +36,7 @@ const config: Config = {
           900: "#111111", // heading text
         },
         danger: "#E53E3E", // 에러 색상
+        favorite: "#FCBE00", // 즐겨찾기 색상
       },
       fontFamily: {
         sans: ["Pretendard", "sans-serif"],

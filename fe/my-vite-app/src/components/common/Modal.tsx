@@ -1,6 +1,6 @@
-// src/components/common/Modal.tsx
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, {useEffect} from "react";
+import {X} from "lucide-react";
+import {motion, AnimatePresence} from "framer-motion";
 
 interface ModalProps {
   isOpen: boolean;
@@ -9,39 +9,51 @@ interface ModalProps {
   className?: string;
 }
 
-export default function Modal({ isOpen, onClose, children, className = '' }: ModalProps) {
+export default function Modal({isOpen, onClose, children, className = ""}: ModalProps) {
   useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleEsc);
     } else {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = "unset";
     }
 
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleEsc);
     };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
+  }, [isOpen, onClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black bg-opacity-50"
-        onClick={onClose}
-      />
-      
-      {/* Modal Content */}
-      <div className={`relative bg-white rounded-lg shadow-xl ${className}`}>
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100"
-        >
-          <X className="w-6 h-6" />
-        </button>
-        {children}
-      </div>
-    </div>
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            initial={{opacity: 0}}
+            animate={{opacity: 1}}
+            exit={{opacity: 0}}
+            onClick={onClose}
+          />
+
+          {/* Modal Content */}
+          <motion.div
+            className={`relative bg-white rounded-2xl shadow-xl w-full max-w-sm ${className}`}
+            initial={{scale: 0.95, opacity: 0}}
+            animate={{scale: 1, opacity: 1}}
+            exit={{scale: 0.95, opacity: 0}}
+            transition={{duration: 0.2}}
+          >
+            {children}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
