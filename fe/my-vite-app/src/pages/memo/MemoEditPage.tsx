@@ -5,11 +5,11 @@ import {useToast} from "@/contexts/useToast";
 import KeywordInput from "@/components/memo/KeywordInput";
 import Header, {HeaderAction} from "@/components/layout/Header";
 import Modal from "@/components/common/Modal"; // Modal 컴포넌트 import
-import {getMemo, updateMemo, MemoRequest, deleteMemo} from "@/services/memo";
+import {getMemo, updateMemo, MemoRequest, deleteMemo, toggleFavorite} from "@/services/memo";
 import {Loader} from "lucide-react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
-import { Button } from "@/components/common/Button";
+import {Button} from "@/components/common/Button";
 
 export default function MemoEditPage() {
   const {id} = useParams<{id: string}>();
@@ -31,6 +31,7 @@ export default function MemoEditPage() {
   });
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -50,6 +51,7 @@ export default function MemoEditPage() {
         };
         setFormData(memoData);
         setOriginalFormData(memoData); // 원본 데이터 저장
+        setIsFavorite(data.isFavorite);
       } catch (error) {
         showToast("메모 데이터를 불러오는데 실패했습니다.", "error");
         navigate(`/memos/${id}`);
@@ -94,6 +96,17 @@ export default function MemoEditPage() {
     setShowDeleteModal(true); // 삭제 모달 열기
   };
 
+  const handleFavorite = async () => {
+    if (!id) return;
+    try {
+      await toggleFavorite([id], !isFavorite);
+      setIsFavorite((prev) => !prev);
+      showToast(!isFavorite ? "메모를 즐겨찾기에 추가했습니다." : "메모를 즐겨찾기에서 제거했습니다.", "success");
+    } catch (error) {
+      showToast("즐겨찾기 상태 변경에 실패했습니다.", "error");
+    }
+  };
+
   const handleHeaderAction = (action: HeaderAction) => {
     switch (action) {
       case "back":
@@ -104,6 +117,9 @@ export default function MemoEditPage() {
         break;
       case "delete":
         handleDelete();
+        break;
+      case "toggleFavorite":
+        handleFavorite();
         break;
     }
   };
@@ -142,9 +158,10 @@ export default function MemoEditPage() {
   return (
     <div className="min-h-screen bg-white">
       <Header
-        actions={["back", "save", "add", "more", "delete"]} // 👈 'delete' 포함 확인
+        actions={["back", "save", "add", "more"]}
         onAction={handleHeaderAction}
         isLoading={isSubmitting}
+        isFavorite={isFavorite}
       />
       <div className="p-4 space-y-4">
         <input

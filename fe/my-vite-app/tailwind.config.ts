@@ -36,6 +36,7 @@ const config: Config = {
           900: "#111111", // heading text
         },
         danger: "#E53E3E", // 에러 색상
+        favorite: "#FCBE00", // 즐겨찾기 색상
       },
       fontFamily: {
         sans: ["Pretendard", "sans-serif"],

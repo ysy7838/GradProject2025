@@ -22,7 +22,7 @@ interface HeaderProps {
   actions: HeaderAction[];
   onAction: (action: HeaderAction) => void;
   isLoading?: boolean;
-  isFavorite?: boolean; // 👈 즐겨찾기 상태를 prop으로 받음
+  isFavorite?: boolean;
 }
 
 export default function Header({actions, onAction, isLoading, isFavorite}: HeaderProps) {
@@ -41,7 +41,11 @@ export default function Header({actions, onAction, isLoading, isFavorite}: Heade
       <div className="border-t my-1"></div>
       <div className="flex justify-around items-center px-2 py-1">
         <button onClick={() => onAction("toggleFavorite")} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full">
-          <Star size={20} className={isFavorite ? "text-yellow-400" : "text-gray-600"} />
+          <Star
+            size={20}
+            className={isFavorite ? "text-favorite" : "text-gray-600"}
+            fill={isFavorite ? "#FCBE00" : "none"}
+          />
         </button>
         <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-full">
           <Share2 size={20} />
