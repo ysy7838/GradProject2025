@@ -5,6 +5,7 @@ class FileController {
   constructor(fileService) {
     this.fileService = fileService;
     this.getPresignedUrl = asyncHandler(this.getPresignedUrl.bind(this));
+    this.getImageUrl = asyncHandler(this.getImageUrl.bind(this));
   }
 
   async getPresignedUrl(req, res) {
@@ -16,6 +17,16 @@ class FileController {
       message: FILE_MESSAGES.PRESIGNED_URL_SUCCESS,
       presignedUrl: url.presignedUrl,
       finalUrl: url.finalUrl,
+    });
+  }
+
+  async getImageUrl(req, res) {
+    const { key } = req.params;
+    const presignedUrl = await this.fileService.getPresignedUrlForDownload({ key });
+
+    res.status(200).json({
+      message: FILE_MESSAGES.FILE_DOWNLOAD_SUCCESS,
+      presignedUrl,
     });
   }
 }

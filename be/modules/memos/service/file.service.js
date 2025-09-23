@@ -17,7 +17,7 @@ class FileService {
   }
 
   // getSignedUrl 헬퍼 함수
-  async _createPresignedUrl(command, expiresIn = 60) {
+  async _createPresignedUrl(command, expiresIn = 3600) { // 기본 1시간으로 변경
     try {
       const presignedUrl = await getSignedUrl(this.s3Client, command, {expiresIn});
       return presignedUrl;
@@ -41,7 +41,7 @@ class FileService {
     });
 
     const presignedUrl = await this._createPresignedUrl(command);
-    const finalUrl = `${process.env.S3_BASE_URL}/${key}`;
+    const finalUrl = process.env.S3_BASE_URL.replace(/\/+$/, '') + '/' + key.replace(/^\/+/, '');
     return {presignedUrl, finalUrl};
   }
 
@@ -59,57 +59,25 @@ class FileService {
     return presignedUrl;
   }
 
-  /**
-   * 이미지를 직접 S3에 업로드
-   * @param {Object} data - buffer, key, contentType, userId
-   * @returns {Promise<string>} S3 URL
-   */
+  // 이미지를 S3에 직접 업로드
   async uploadImageToS3(data) {
-    const {buffer, key, contentType, userId} = data;
+    const { buffer, key, contentType } = data;
     const bucketName = process.env.S3_BUCKET_NAME;
-    
+
     try {
       const command = new PutObjectCommand({
         Bucket: bucketName,
         Key: key,
         Body: buffer,
-        ContentType: contentType,
-        Metadata: {
-          userId: userId.toString(),
-          uploadDate: new Date().toISOString()
-        }
+        ContentType: contentType
       });
 
       await this.s3Client.send(command);
-      
-      // 환경변수의 S3_BASE_URL 사용
-      const baseUrl = process.env.S3_BASE_URL || `https://${bucketName}.s3.${process.env.S3_REGION}.amazonaws.com`;
-      return `${baseUrl}/${key}`;
-      
+      const cleanKey = key.replace(/^\/+/, '');
+      return process.env.S3_BASE_URL.replace(/\/+$/, '') + '/' + cleanKey;
     } catch (error) {
-      console.error("S3 upload error:", error);
-      throw new ExternalServiceError("이미지 업로드 중 오류가 발생했습니다.");
-    }
-  }
-
-  /**
-   * S3에서 이미지 삭제
-   */
-  async deleteImageFromS3(key) {
-    const bucketName = process.env.S3_BUCKET_NAME;
-    
-    try {
-      const command = new DeleteObjectCommand({
-        Bucket: bucketName,
-        Key: key
-      });
-
-      await this.s3Client.send(command);
-      return true;
-      
-    } catch (error) {
-      console.error("S3 delete error:", error);
-      throw new ExternalServiceError("이미지 삭제 중 오류가 발생했습니다.");
+      console.error("S3 이미지 업로드 중 오류:", error);
+      throw new ExternalServiceError(FILE_MESSAGES.FILE_UPLOAD_ERROR);
     }
   }
 }

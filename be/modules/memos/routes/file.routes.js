@@ -4,8 +4,11 @@ import {authenticate} from "../../../middlewares/authenticate.js";
 export default (fileController) => {
   const router = Router();
 
-  // 파일 presigned-url 요청
+  // 파일 presigned-url 요청 (업로드용)
   router.post("/presigned-url", authenticate, fileController.getPresignedUrl);
+
+  // 이미지 조회용 presigned-url 요청
+  router.get("/images/:key", authenticate, fileController.getImageUrl);
 
   return router;
 }
