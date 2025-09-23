@@ -32,7 +32,7 @@
 
   /* H3: 20px, Regular, -1% */
   .typo-h3 {
-    @apply text-xl font-normal tracking-tight;
+    @apply text-xl font-bold tracking-tight;
   }
   
   /* H4: 18px, Bold, -1% */
