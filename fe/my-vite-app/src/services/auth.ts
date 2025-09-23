@@ -8,24 +8,22 @@ import type {
   KakaoLinkResponse,
 } from "@/types/auth";
 import api from "@/utils/api";
-import axios, { AxiosError } from "axios";
-import { ERROR_MESSAGES, handleApiError } from "@/utils/errorHandler";
-import { authUtils } from "@/store/auth";
+import axios, {AxiosError} from "axios";
+import {ERROR_MESSAGES, handleApiError} from "@/utils/errorHandler";
+import {authUtils} from "@/store/auth";
 
 class AuthService {
   // 인증번호 전송 (회원가입)
-  async sendVerificationCode(name: string, email: string): Promise<void> {
+  async sendVerificationCode(email: string): Promise<void> {
     try {
-      const response = await api.post("/api/users/email", { name, email });
+      const response = await api.post("/api/users/email", {email});
       return response.data;
     } catch (error) {
       if (axios.isAxiosError(error) && error.response?.status === 400) {
         const errorMsg = error.response.data;
         // 카카오 로그인으로 가입된 이메일인 경우 처리
         if (errorMsg === "카카오 로그인으로 가입된 이메일입니다.") {
-          throw new Error(
-            "카카오 로그인으로 가입된 이메일입니다. 카카오 로그인을 이용해주세요."
-          );
+          throw new Error("카카오 로그인으로 가입된 이메일입니다. 카카오 로그인을 이용해주세요.");
         }
         // 이미 존재하는 계정일 경우 에러 메시지 던지기
         throw new Error("이미 가입된 이메일입니다.");
@@ -69,9 +67,7 @@ class AuthService {
       if (axios.isAxiosError(error) && error.response?.status === 400) {
         const errorMsg = error.response.data;
         if (errorMsg === "카카오 로그인으로 가입된 이메일입니다.") {
-          throw new Error(
-            "카카오 로그인으로 가입된 이메일입니다. 카카오 로그인을 이용해주세요."
-          );
+          throw new Error("카카오 로그인으로 가입된 이메일입니다. 카카오 로그인을 이용해주세요.");
         }
       }
       throw handleApiError(error);
@@ -87,7 +83,7 @@ class AuthService {
         autoLogin,
       });
 
-      const { accessToken, refreshToken } = response.data;
+      const {accessToken, refreshToken} = response.data;
 
       if (accessToken) {
         authUtils.setToken(accessToken);
@@ -124,13 +120,8 @@ class AuthService {
 
       if (axios.isAxiosError(error) && error.response) {
         // 카카오 로그인 계정 처리
-        if (
-          error.response.status === 400 &&
-          error.response.data === "카카오 로그인 전용 계정입니다."
-        ) {
-          throw new Error(
-            "카카오 로그인으로 가입된 계정입니다. 카카오 로그인을 이용해주세요."
-          );
+        if (error.response.status === 400 && error.response.data === "카카오 로그인 전용 계정입니다.") {
+          throw new Error("카카오 로그인으로 가입된 계정입니다. 카카오 로그인을 이용해주세요.");
         }
 
         // HTTP 상태 코드에 따른 처리
@@ -163,16 +154,14 @@ class AuthService {
   // 비밀번호 재설정 인증번호 전송
   async sendPasswordResetCode(email: string): Promise<void> {
     try {
-      const response = await api.post("/api/users/password/email", { email });
+      const response = await api.post("/api/users/password/email", {email});
       return response.data;
     } catch (error) {
       // 카카오 로그인 계정 처리
       if (axios.isAxiosError(error) && error.response?.status === 400) {
         const errorMsg = error.response.data;
         if (errorMsg === "카카오 로그인으로 가입된 이메일입니다.") {
-          throw new Error(
-            "카카오 로그인으로 가입된 이메일입니다. 카카오 로그인을 이용해주세요."
-          );
+          throw new Error("카카오 로그인으로 가입된 이메일입니다. 카카오 로그인을 이용해주세요.");
         }
       }
       throw handleApiError(error);
@@ -209,7 +198,7 @@ class AuthService {
   }
 
   // 회원 탈퇴
-  async deleteUser(): Promise<{ message: string }> {
+  async deleteUser(): Promise<{message: string}> {
     try {
       const response = await api.delete("/api/users/delete");
       return response.data;
@@ -219,16 +208,13 @@ class AuthService {
   }
 
   // 토큰 갱신
-  async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
+  async refreshToken(refreshToken: string): Promise<{accessToken: string}> {
     try {
-      const response = await api.post<{ accessToken: string }>(
-        "/api/users/token",
-        {
-          refreshToken,
-        }
-      );
+      const response = await api.post<{accessToken: string}>("/api/users/token", {
+        refreshToken,
+      });
 
-      const { accessToken } = response.data;
+      const {accessToken} = response.data;
       if (accessToken) {
         authUtils.setToken(accessToken);
       } else {
@@ -243,11 +229,7 @@ class AuthService {
   }
 
   // 카카오 계정 연동 API
-  async linkKakaoAccount(
-    email: string,
-    name: string,
-    profileImage?: string
-  ): Promise<KakaoLinkResponse> {
+  async linkKakaoAccount(email: string, name: string, profileImage?: string): Promise<KakaoLinkResponse> {
     try {
       const response = await api.post("/api/users/kakao/link", {
         email,

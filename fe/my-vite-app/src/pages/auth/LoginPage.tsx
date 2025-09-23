@@ -1,17 +1,40 @@
 import {useState, useCallback, useEffect} from "react";
 import {useForm} from "react-hook-form";
 import {Link, useNavigate} from "react-router-dom";
-import {useToast} from "../../contexts/useToast";
+import {Loader2} from "lucide-react";
+import axios from "axios";
+
+import {useToast} from "@/contexts/useToast";
 import {Input} from "@/components/common/Input";
+import {Button} from "@/components/common/Button";
 import {authService} from "@/services/auth";
 import AccountRecoveryModal from "@/components/auth/AccountRecoveryModal";
 import type {LoginForm} from "@/types/auth";
 import {authUtils} from "@/store/auth";
 
+// Google Icon SVG Component
+const GoogleIcon = () => (
+  <svg
+    className="mr-2 -ml-1 w-4 h-4"
+    aria-hidden="true"
+    focusable="false"
+    data-prefix="fab"
+    data-icon="google"
+    role="img"
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 488 512"
+  >
+    <path
+      fill="currentColor"
+      d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 126 23.4 172.9 61.9l-72.2 72.2C322 104 286.6 88 248 88c-88.3 0-160 71.7-160 160s71.7 160 160 160c92.6 0 145.5-68.2 149.9-105.5H248V280h236.1c2.3 12.7 3.9 26.1 3.9 40.2z"
+    ></path>
+  </svg>
+);
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const {showToast} = useToast();
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false); // 👈 자동 로그인 상태 추가
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
@@ -23,245 +46,158 @@ export default function LoginPage() {
     handleSubmit,
     watch,
     formState: {errors},
-  } = useForm<LoginForm>();
+  } = useForm<LoginForm>({mode: "onChange"});
 
   const emailValue = watch("email");
   const passwordValue = watch("password");
 
-  // 이메일 형식 검증 함수
   const validateEmail = (email: string) => {
+    if (!email) return false;
     return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(email);
   };
 
-  // 이메일 값이 변경될 때마다 유효성 검사
   useEffect(() => {
     if (emailValue) {
       const isValid = validateEmail(emailValue);
-      if (!isValid) {
-        setEmailError("이메일 형식이 올바르지 않습니다");
-      } else {
-        setEmailError(null);
-      }
+      setEmailError(isValid ? null : "이메일 형식이 올바르지 않습니다");
     } else {
       setEmailError(null);
     }
   }, [emailValue]);
 
-  // 비밀번호 입력 필드 변경 시 관련 에러 초기화
   useEffect(() => {
-    setPasswordError(null);
+    if (passwordValue) setPasswordError(null);
   }, [passwordValue]);
 
-  // 입력 값 변경 시 로그인 오류 초기화
   useEffect(() => {
-    if (emailValue || passwordValue) {
-      setLoginError(null);
-    }
+    if (emailValue || passwordValue) setLoginError(null);
   }, [emailValue, passwordValue]);
 
-  const isButtonActive = emailValue && validateEmail(emailValue) && passwordValue?.length > 0;
+  const isButtonActive = validateEmail(emailValue) && passwordValue && !emailError && !errors.password;
 
   const handleRecoveryModalConfirm = () => {
     setShowRecoveryModal(false);
     showToast("로그인이 완료되었습니다.", "success");
-    navigate("/collections", {replace: true});
+    navigate("/categories", {replace: true});
   };
 
   const onSubmit = useCallback(
     async (data: LoginForm) => {
       if (isLoading) return;
-
-      // 에러 상태 초기화
+      setIsLoading(true);
       setLoginError(null);
       setEmailError(null);
       setPasswordError(null);
-      setIsLoading(true);
 
       try {
-        const response = await authService.login(data, rememberMe);
+        const response = await authService.login(data, rememberMe); // 👈 rememberMe 상태 전달
         localStorage.setItem("email", data.email);
-
         const currentUser = authUtils.getStoredUser();
         if (currentUser) {
-          const updatedUser = {
-            ...currentUser,
-            provider: "local" as const,
-          };
-          authUtils.setStoredUser(updatedUser);
+          authUtils.setStoredUser({...currentUser, provider: "local" as const});
         }
 
         if (response.recovered) {
           setShowRecoveryModal(true);
         } else {
           showToast("로그인이 완료되었습니다.", "success");
-          navigate("/collections");
+          navigate("/categories");
         }
       } catch (error) {
-        if (error instanceof Error) {
-          const errorMessage = error.message;
-
-          // 에러 메시지 분류
-          if (errorMessage.includes("이메일") || errorMessage.includes("등록되지 않은 계정")) {
-            setEmailError(errorMessage);
-          } else if (errorMessage.includes("비밀번호")) {
-            setPasswordError(errorMessage);
-          } else if (errorMessage.includes("계정 정보") || errorMessage.includes("회원가입")) {
-            setLoginError(errorMessage);
+        // 👇 에러 메시지를 상세하게 보여주도록 로직 수정
+        if (axios.isAxiosError(error) && error.response) {
+          const message = error.response.data?.message || "로그인에 실패했습니다.";
+          if (message.includes("이메일") || message.includes("등록되지 않은")) {
+            setEmailError(message);
+          } else if (message.includes("비밀번호")) {
+            setPasswordError(message);
           } else {
-            setLoginError(errorMessage);
+            setLoginError(message);
           }
+        } else if (error instanceof Error) {
+          // 네트워크 오류 등 서버 응답이 없는 경우
+          setLoginError(error.message);
         } else {
+          // 그 외 알 수 없는 오류
           setLoginError("알 수 없는 오류가 발생했습니다.");
         }
       } finally {
         setIsLoading(false);
       }
     },
-    [navigate, rememberMe, showToast, isLoading, loginError, emailError, passwordError]
+    [navigate, showToast, isLoading, rememberMe]
   );
 
   return (
-    <div className="min-h-screen flex max-h-screen overflow-hidden">
+    <div className="min-h-screen flex flex-col justify-center items-center p-4 bg-gradient-to-b from-gradient-100 to-gradient-0">
       <AccountRecoveryModal isOpen={showRecoveryModal} onConfirm={handleRecoveryModalConfirm} />
 
-      {/* Left Section */}
-      <div className="hidden lg:block lg:w-1/2 flex-shrink-0 overflow-hidden">
-        <img src="/images/login-intro-bg.svg" alt="Smart Memo" className="w-full h-full object-cover" />
-      </div>
+      <div className="w-full max-w-sm mx-auto">
+        <div className="text-center mb-8">
+          <h2 className="typo-h1 text-gray-900">계정에 로그인해주세요</h2>
+          <p className="text-sm text-gray-500 mt-2">이메일과 비밀번호를 입력해주세요.</p>
+        </div>
 
-      {/* Right Section */}
-      <div className="flex-1 bg-[#f9faf9] flex items-center justify-center overflow-y-auto py-4">
-        <div className="w-full max-w-[520px] px-4">
-          <h2 className="text-center text-2xl font-bold text-primary mb-8 sm:mb-12">로그인</h2>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <Input
+            placeholder="예시: abc@gmail.com"
+            {...register("email")}
+            error={emailError || errors.email?.message}
+            disabled={isLoading}
+            emailOnly
+          />
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 bg-white p-6 sm:p-8 rounded-lg shadow-md">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <p className="text-sm text-gray-700">이메일</p>
-                <Input
-                  placeholder="abc@refhub.com"
-                  {...register("email", {
-                    required: "이메일을 입력해주세요",
-                    pattern: {
-                      value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                      message: "이메일 형식이 올바르지 않습니다",
-                    },
-                  })}
-                  error={emailError || errors.email?.message}
-                  className="h-12 sm:h-14"
-                  emailOnly
-                  disabled={isLoading}
-                />
-              </div>
+          <Input
+            type="password"
+            placeholder="비밀번호를 입력해주세요"
+            {...register("password")}
+            error={passwordError || errors.password?.message}
+            autoComplete="current-password"
+            disabled={isLoading}
+            passwordOnly
+          />
 
-              <div className="space-y-2">
-                <p className="text-sm text-gray-700">비밀번호</p>
-                <Input
-                  type="password"
-                  placeholder="비밀번호를 입력하세요"
-                  {...register("password", {
-                    required: "비밀번호를 입력해주세요",
-                  })}
-                  error={passwordError || errors.password?.message}
-                  className="h-12 sm:h-14"
-                  passwordOnly
-                  autoComplete="current-password"
-                  disabled={isLoading}
-                />
-              </div>
+          {loginError && <p className="typo-caption3 text-danger text-center">{loginError}</p>}
+
+          {/* 자동 로그인 및 비밀번호 찾기 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <input
+                id="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary focus:ring-offset-0"
+              />
+              <label htmlFor="remember-me" className="ml-2 block typo-caption2 font-medium text-gray-500">
+                자동 로그인
+              </label>
             </div>
-
-            <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary focus:ring-offset-0 checked:bg-primary checked:hover:bg-primary checked:focus:bg-primary"
-                  disabled={isLoading}
-                />
-                <label htmlFor="remember-me" className="ml-2 text-sm text-[#676967]">
-                  자동 로그인
-                </label>
-              </div>
-              <Link to="/auth/reset-password" className="text-sm text-[#676967] hover:text-primary transition-colors">
-                비밀번호를 잊으셨나요?
-              </Link>
-            </div>
-
-            <div className="space-y-4">
-              <button
-                type="submit"
-                disabled={!isButtonActive || isLoading}
-                className={`
-                  w-full h-12 sm:h-14 rounded-lg font-medium transition-colors duration-200
-                  ${
-                    isButtonActive && !isLoading
-                      ? "bg-primary hover:bg-primary-dark text-white"
-                      : "bg-[#8A8D8A] text-white cursor-not-allowed"
-                  }
-                `}
-              >
-                {isLoading ? (
-                  <span className="flex items-center justify-center">
-                    <svg
-                      className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    로그인 중...
-                  </span>
-                ) : (
-                  "로그인"
-                )}
-              </button>
-            </div>
-
-            {loginError && (
-              <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
-                <p className="flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4 mr-1.5 flex-shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                  {loginError}
-                </p>
-              </div>
-            )}
-          </form>
-
-          <div className="text-center mt-4 sm:mt-6">
-            <span className="text-[#676967] text-sm">계정이 없으신가요? </span>
-            <Link to="/auth/signup" className="text-primary hover:text-primary-dark text-sm transition-colors">
-              회원가입
+            <Link
+              to="/auth/reset-password"
+              className="typo-caption2 font-medium text-gray-500 hover:text-primary transition-colors"
+            >
+              비밀번호를 잊으셨나요?
             </Link>
           </div>
+          <div className="pt-4 space-y-3">
+            <Button type="submit" disabled={!isButtonActive || isLoading} isLoading={isLoading} fullWidth>
+              로그인
+            </Button>
+            {<Button type="button" variant="outline" fullWidth={true} leftIcon={<GoogleIcon />}>
+              구글로 계속하기
+            </Button>}
+          </div>
+        </form>
+
+        <div className="text-center mt-6">
+          <span className="typo-caption2 text-gray-500">계정이 없으신가요? </span>
+          <Link
+            to="/auth/signup"
+            className="typo-caption2 font-semibold text-primary hover:text-primary-dark transition-colors"
+          >
+            가입하기
+          </Link>
         </div>
       </div>
     </div>

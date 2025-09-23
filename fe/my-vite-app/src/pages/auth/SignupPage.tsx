@@ -1,143 +1,122 @@
 // src/pages/auth/SignupPage.tsx
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
-import { Input } from "@/components/common/Input";
-import { Button } from "@/components/common/Button";
-import { useToast } from "@/contexts/useToast";
-import { authService } from "@/services/auth";
-import type { SignupForm } from "@/types/auth";
+import {useState, useEffect} from "react";
+import {useForm} from "react-hook-form";
+import {Link, useNavigate} from "react-router-dom"; // Assuming react-router-dom is used
+import {Input} from "@/components/common/Input";
+import {Button} from "@/components/common/Button";
+import {useToast} from "@/contexts/useToast";
+import {authService} from "@/services/auth";
+import type {SignupForm} from "@/types/auth";
 
-type SignupStep = "INFO" | "VERIFY" | "PASSWORD";
+// Type definition for the steps in the signup process
+type SignupStep = "EMAIL" | "VERIFY" | "PASSWORD";
 
 export default function SignupPage() {
-  const [currentStep, setCurrentStep] = useState<SignupStep>("INFO");
-  const [verificationSent, setVerificationSent] = useState(false);
-  const [isVerified, setIsVerified] = useState(false);
+  const [currentStep, setCurrentStep] = useState<SignupStep>("EMAIL");
   const [countdown, setCountdown] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
-  // Add new state for verification error
-  const [verificationError, setVerificationError] = useState<string | null>(
-    null
-  );
-  const { showToast } = useToast();
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+
+  const {showToast} = useToast();
   const navigate = useNavigate();
 
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: {errors},
     watch,
     trigger,
-    clearErrors,
     getValues,
   } = useForm<SignupForm>({
     mode: "onChange",
   });
 
+  // Effect for the countdown timer
   useEffect(() => {
+    let timer: any;
     if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-      return () => clearTimeout(timer);
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
     }
+    return () => clearTimeout(timer);
   }, [countdown]);
 
+  // Watch form fields
   const email = watch("email");
   const verificationCode = watch("verificationCode");
   const password = watch("password");
   const passwordConfirm = watch("passwordConfirm");
 
-  // Clear verification error when code changes
+  // Clear verification error when the code input changes
   useEffect(() => {
-    if (verificationError) {
+    if (verificationCode) {
       setVerificationError(null);
     }
   }, [verificationCode]);
 
-  const isEmailValid = email && !errors.email;
-  const isVerificationComplete =
-    verificationCode?.length === 6 &&
-    !errors.verificationCode &&
-    !verificationError;
-  const isPasswordValid =
-    password && passwordConfirm && !errors.password && !errors.passwordConfirm;
+  // Validation status for each step to control button state
+  const isEmailStepValid = email && !errors.email;
+  const isVerificationStepValid = verificationCode?.length === 6 && !errors.verificationCode;
+  const isPasswordStepValid = password && !errors.password && passwordConfirm && !errors.passwordConfirm;
 
-  // 비밀번호 유효성 검사 함수
+  // Password validation logic
   const validatePassword = (value: string) => {
-    const hasLetter = /[A-Za-z]/.test(value);
-    const hasNumber = /[0-9]/.test(value);
+    if (!value) return "비밀번호를 입력해주세요.";
+    const hasLetter = /[a-zA-Z]/.test(value);
+    const hasNumber = /\d/.test(value);
     const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(value);
-    const validLength = value.length >= 8 && value.length <= 12;
+    const isValidLength = value.length >= 8 && value.length <= 12;
 
-    if (!value) return "비밀번호를 입력해주세요";
+    const validConditions = [hasLetter, hasNumber, hasSpecial].filter(Boolean).length;
 
-    const validCombination =
-      (hasLetter && hasNumber) ||
-      (hasLetter && hasSpecial) ||
-      (hasNumber && hasSpecial);
-
-    if (!validLength || !validCombination) {
-      return "영문, 숫자, 특수문자 중 2종류 이상 조합 (8-12자)";
+    if (!isValidLength || validConditions < 2) {
+      return "영문, 숫자, 특수문자 중 2가지 이상 조합하여 8-12자로 입력해주세요.";
     }
-
     return true;
   };
 
+  // Handler to send the verification code
   const handleVerificationSend = async () => {
-    const isValid = await trigger(["name", "email"]);
+    const isValid = await trigger(["email"]);
     if (!isValid || isLoading) return;
 
     setIsLoading(true);
     try {
-      const { name, email } = getValues();
-      await authService.sendVerificationCode(name, email);
-      setVerificationSent(true);
-      setCountdown(600); // 10분
-      clearErrors("verificationCode");
-      setVerificationError(null); // Clear any existing verification errors
+      await authService.sendVerificationCode(getValues("email"));
       showToast("인증번호가 발송되었습니다.", "success");
+      setCurrentStep("VERIFY");
+      setCountdown(300); // 10 minutes
     } catch (error) {
-      if (error instanceof Error) {
-        // 서버에서 보내는 메시지를 그대로 사용
-        showToast(error.message, "error");
-      } else {
-        // 알 수 없는 형태의 오류일 경우 기본 메시지 사용
-        showToast("인증번호 전송에 실패했습니다.", "error");
-      }
+      const errorMessage = error instanceof Error ? error.message : "인증번호 전송에 실패했습니다.";
+      showToast(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Handler to verify the code
   const handleVerifyCode = async () => {
     const isValid = await trigger("verificationCode");
     if (!isValid || isLoading) return;
 
     setIsLoading(true);
+    setVerificationError(null);
     try {
       await authService.verifyCode({
         email: getValues("email"),
         verificationCode: getValues("verificationCode"),
       });
-
-      setIsVerified(true);
-      setVerificationError(null); // Clear any errors on success
-      setCurrentStep("PASSWORD");
       showToast("인증이 완료되었습니다.", "success");
+      setCurrentStep("PASSWORD");
     } catch (error) {
-      if (error instanceof Error) {
-        // Set error message instead of showing toast
-        setVerificationError("인증번호가 일치하지 않습니다.");
-      } else {
-        setVerificationError("인증에 실패했습니다.");
-      }
+      setVerificationError("인증번호가 일치하지 않습니다.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Handler for the final form submission
   const onSubmit = async (data: SignupForm) => {
-    if (isLoading || !isVerified) return;
+    if (isLoading) return;
 
     setIsLoading(true);
     try {
@@ -145,171 +124,129 @@ export default function SignupPage() {
       showToast("회원가입이 완료되었습니다. 로그인해주세요.", "success");
       navigate("/auth/login");
     } catch (error) {
-      if (error instanceof Error) {
-        showToast(error.message, "error");
-      } else {
-        showToast("회원가입에 실패했습니다.", "error");
-      }
+      const errorMessage = error instanceof Error ? error.message : "회원가입에 실패했습니다.";
+      showToast(errorMessage, "error");
     } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <div className="flex justify-center items-center px-4 mt-16">
-      <div className="w-[520px]">
-        <h2 className="text-[32px] text-center font-bold text-primary mb-8">
-          회원가입
-        </h2>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+  const renderStep = () => {
+    switch (currentStep) {
+      case "VERIFY":
+        return (
           <div className="space-y-4">
-            {/* 이름 입력 필드 */}
-            <Input
-              label="이름"
-              placeholder="이름을 입력하세요"
-              className="w-full h-[56px]"
-              nameOnly
-              maxLength={10}
-              {...register("name", {
-                required: "이름을 입력해주세요",
-                pattern: {
-                  value: /^[A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ]+$/, // 한글 자음/모음 추가
-                  message: "한글 또는 영문만 입력 가능합니다",
-                },
-                maxLength: {
-                  value: 10,
-                  message: "최대 10글자까지 입력 가능합니다",
-                },
-              })}
-              error={errors.name?.message}
-              disabled={verificationSent}
-            />
-
-            {/* 이메일 입력 필드 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                이메일
-              </label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    placeholder="abc@refhub.com"
-                    className="w-[379px] h-[56px]"
-                    {...register("email", {
-                      required: "이메일을 입력해주세요",
-                      pattern: {
-                        value:
-                          /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/i,
-                        message: "이메일 형식이 올바르지 않습니다",
-                      },
-                    })}
-                    error={errors.email?.message}
-                    disabled={verificationSent}
-                    emailOnly
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant={
-                    isVerified
-                      ? "primary"
-                      : countdown > 0
-                      ? "secondary"
-                      : "primary"
-                  }
-                  onClick={handleVerificationSend}
-                  disabled={!isEmailValid || isVerified || countdown > 0}
-                  className="w-[136px] h-[56px] text-base font-medium whitespace-nowrap"
-                >
-                  {isVerified
-                    ? "인증 완료"
-                    : isLoading
-                    ? "전송 중..."
-                    : countdown > 0
-                    ? `${Math.floor(countdown / 60)}:${String(
-                        countdown % 60
-                      ).padStart(2, "0")}`
-                    : "인증번호 전송"}
-                </Button>
-              </div>
+            <Input label="이메일" value={getValues("email")} disabled className="bg-gray-200 text-gray-500" />
+            <div className="relative">
+              <Input
+                placeholder="인증번호 6자리를 입력해주세요"
+                maxLength={6}
+                numbersOnly
+                {...register("verificationCode", {
+                  required: "인증번호를 입력해주세요.",
+                  minLength: {value: 6, message: "6자리 숫자를 입력해주세요."},
+                })}
+                error={errors.verificationCode?.message || verificationError || undefined}
+              />
+              {countdown > 0 && (
+                <span className="absolute top-1/2 -translate-y-1/2 right-4 text-sm text-gray-500">{`${String(
+                  Math.floor(countdown / 60)
+                ).padStart(2, "0")}:${String(countdown % 60).padStart(2, "0")}`}</span>
+              )}
             </div>
-
-            {/* 인증번호 입력 필드 */}
-            {verificationSent && currentStep !== "PASSWORD" && (
-              <div className="space-y-4">
-                <Input
-                  label="인증번호"
-                  placeholder="인증번호 6자리를 입력하세요"
-                  className="w-full h-[56px]"
-                  maxLength={6}
-                  numbersOnly
-                  {...register("verificationCode", {
-                    required: "인증번호를 입력해주세요",
-                    pattern: {
-                      value: /^[0-9]{6}$/,
-                      message: "인증번호는 6자리 숫자입니다",
-                    },
-                  })}
-                  error={verificationError || errors.verificationCode?.message}
-                />
-                <Button
-                  type="button"
-                  variant={isVerificationComplete ? "primary" : "secondary"}
-                  onClick={handleVerifyCode}
-                  disabled={!isVerificationComplete || isLoading}
-                  className="w-full h-[56px]"
-                >
-                  {isLoading ? "확인 중..." : "다음"}
-                </Button>
-              </div>
-            )}
-
-            {/* 비밀번호 입력 필드 */}
-            {currentStep === "PASSWORD" && (
-              <div className="space-y-4">
-                <Input
-                  label="비밀번호"
-                  type="password"
-                  placeholder="비밀번호를 입력하세요"
-                  className="w-full h-[56px]"
-                  passwordOnly
-                  autoComplete="new-password"
-                  {...register("password", {
-                    required: "비밀번호를 입력해주세요",
-                    validate: validatePassword,
-                  })}
-                  error={errors.password?.message}
-                  helperText="영문, 숫자, 특수문자 중 2종류 이상 조합 (8-12자)"
-                  isValid={Boolean(password && !errors.password)}
-                />
-                <Input
-                  label="비밀번호 재입력"
-                  type="password"
-                  placeholder="비밀번호를 다시 입력하세요"
-                  className="w-full h-[56px]"
-                  passwordOnly
-                  autoComplete="new-password"
-                  {...register("passwordConfirm", {
-                    required: "비밀번호 확인을 입력해주세요",
-                    validate: (value) =>
-                      value === password || "비밀번호가 일치하지 않습니다",
-                  })}
-                  error={errors.passwordConfirm?.message}
-                  isValid={Boolean(passwordConfirm && !errors.passwordConfirm)}
-                />
-                <Button
-                  type="submit"
-                  variant={isPasswordValid ? "primary" : "secondary"}
-                  className="w-full h-[56px]"
-                  disabled={!isPasswordValid || isLoading}
-                >
-                  {isLoading ? "가입 중..." : "회원가입"}
-                </Button>
-              </div>
-            )}
+            <div className="pt-4">
+              <Button
+                type="button"
+                onClick={handleVerifyCode}
+                disabled={!isVerificationStepValid || isLoading}
+                fullWidth
+              >
+                {isLoading ? "확인 중..." : "다음"}
+              </Button>
+            </div>
           </div>
-        </form>
+        );
+      case "PASSWORD":
+        return (
+          <div className="space-y-4">
+            <Input
+              type="password"
+              placeholder="비밀번호를 입력해주세요"
+              helperText="영문, 숫자, 특수문자 중 2가지 이상 조합 (8-12자)"
+              {...register("password", {validate: validatePassword})}
+              error={errors.password?.message}
+              isValid={!!password && !errors.password}
+              autoComplete="new-password"
+            />
+            <Input
+              type="password"
+              placeholder="비밀번호를 다시 입력해주세요"
+              {...register("passwordConfirm", {
+                required: "비밀번호를 다시 입력해주세요.",
+                validate: (value) => value === password || "비밀번호가 일치하지 않습니다.",
+              })}
+              error={errors.passwordConfirm?.message}
+              isValid={!!passwordConfirm && !errors.passwordConfirm}
+              autoComplete="new-password"
+            />
+            <div className="pt-4">
+              <Button type="submit" disabled={!isPasswordStepValid || isLoading} fullWidth>
+                {isLoading ? "가입 중..." : "회원가입"}
+              </Button>
+            </div>
+          </div>
+        );
+      case "EMAIL":
+      default:
+        return (
+          <div className="space-y-4">
+            <div className="flex items-start gap-2">
+              <Input
+                placeholder="예시: abc@gmail.com"
+                className="flex-1"
+                {...register("email", {
+                  required: "이메일을 입력해주세요",
+                  pattern: {
+                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
+                    message: "이메일 형식이 올바르지 않습니다",
+                  },
+                })}
+                error={errors.email?.message}
+              />
+              <Button
+                type="button"
+                onClick={handleVerificationSend}
+                disabled={!isEmailStepValid || isLoading}
+                className="w-auto px-4 whitespace-nowrap !h-12"
+              >
+                {isLoading ? "전송 중..." : "인증하기"}
+              </Button>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col justify-center items-center p-4 bg-gradient-to-b from-gradient-100 to-gradient-0">
+      <div className="w-full max-w-sm mx-auto">
+        <div className="text-center mb-8">
+          <h2 className="typo-h1 text-gray-900">회원가입</h2>
+          <p className="text-sm text-gray-500 mt-2">
+            {currentStep === "EMAIL" && "서비스 이용을 위해 정보를 입력해주세요."}
+            {currentStep === "VERIFY" && "이메일로 전송된 인증번호를 입력해주세요."}
+            {currentStep === "PASSWORD" && "마지막 단계입니다. 비밀번호를 설정해주세요."}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)}>{renderStep()}</form>
+        <div className="text-center mt-6">
+          <span className="text-sm text-gray-500">이미 계정이 있으신가요? </span>
+          <Link to="/auth/login" className="font-semibold text-primary-100 hover:text-primary-200 transition-colors">
+            로그인하기
+          </Link>
+        </div>
       </div>
     </div>
   );
