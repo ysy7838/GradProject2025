@@ -24,7 +24,7 @@ export default defineConfig(() => {
         id: "/",
         start_url: "/",
         display: "standalone",
-        theme_color: "#52C39C",
+        theme_color: "#3EA99F",
         background_color: "#ffffff",
         orientation: "any",
         categories: ["productivity", "utilities"],

@@ -1,5 +1,4 @@
 /* src/styles/globals.css */
-/*
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -19,4 +18,65 @@
     @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
   }
 }
-*/
+
+@layer utilities {
+  /* H1: 30px, Bold, -1% */
+  .typo-h1 {
+    @apply text-[30px] font-bold tracking-tight;
+  }
+
+  /* H2: 24px, Bold, -1% */
+  .typo-h2 {
+    @apply text-2xl font-bold tracking-tight;
+  }
+
+  /* H3: 20px, Regular, -1% */
+  .typo-h3 {
+    @apply text-xl font-normal tracking-tight;
+  }
+  
+  /* H4: 18px, Bold, -1% */
+  .typo-h4 {
+    @apply text-lg font-bold tracking-tight;
+  }
+
+  /* Subtitle1: 18px, Regular, -1% */
+  .typo-subtitle1 {
+    @apply text-lg font-normal tracking-tight;
+  }
+  
+  /* Subtitle2: 16px, Bold, -1% */
+  .typo-subtitle2 {
+    @apply text-base font-bold tracking-tight;
+  }
+
+  /* Body1: 16px, Medium, -1% */
+  .typo-body1 {
+    @apply text-base font-medium tracking-tight;
+  }
+
+  /* Body2: 16px, Regular, -1% */
+  .typo-body2 {
+    @apply text-base font-normal tracking-tight;
+  }
+  
+  /* Caption1: 14px, Bold, -1% */
+  .typo-caption1 {
+    @apply text-sm font-bold tracking-tight;
+  }
+  
+  /* Caption2: 14px, Regular, -1% */
+  .typo-caption2 {
+    @apply text-sm font-normal tracking-tight;
+  }
+
+  /* Button: 12px, Medium, -1% */
+  .typo-button {
+    @apply text-xs font-medium tracking-tight;
+  }
+  
+  /* Caption3: 12px, Regular, -1% */
+  .typo-caption3 {
+    @apply text-xs font-normal tracking-tight;
+  }
+}

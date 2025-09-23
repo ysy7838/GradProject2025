@@ -12,7 +12,7 @@ export function PublicRoute({ children }: PublicRouteProps) {
   
   // 인증된 사용자는 메인 페이지(컬렉션)로 리디렉션
   if (isAuthenticated) {
-    return <Navigate to="/collections" replace />;
+    return <Navigate to="/categories" replace />;
   }
   
   // 인증되지 않은 사용자는 로그인 페이지로 접근 가능

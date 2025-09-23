@@ -6,7 +6,6 @@ export interface LoginForm {
 }
 
 export interface SignupForm {
-  name: string;
   email: string;
   verificationCode: string;
   password: string;
