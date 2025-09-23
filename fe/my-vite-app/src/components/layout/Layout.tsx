@@ -78,7 +78,7 @@ export default function Layout() {
   // 로그인 페이지에서는 헤더를 표시하지 않도록 수정
   const shouldUseAuthHeader =
     !isAuthenticated &&
-    (isSignupPage || isPasswordResetPage) &&
+    ! (isSignupPage || isPasswordResetPage) &&
     !isLoginPage &&
     !isKakaoCallbackPage;
 
