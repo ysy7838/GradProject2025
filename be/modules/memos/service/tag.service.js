@@ -58,6 +58,11 @@ class TagService {
   }
 
   // 태그 이름으로 태그 찾기
+  async findTagByName(tagName) {
+    const normalizedTagName = tagName.toLowerCase();
+    return await this.tagRepository.findByTagName(normalizedTagName);
+  }
+
   async findTagsByNames(tagNames) {
     const normalizedTagNames = tagNames.map((name) => name.trim().toLowerCase());
     return await this.tagRepository.findByTagNames(normalizedTagNames);
