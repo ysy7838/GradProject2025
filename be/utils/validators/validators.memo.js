@@ -2,27 +2,15 @@ import {check} from "express-validator";
 import {validateMiddleware, validateObjectId, validateObjectIdArray} from "./validators.common.js";
 import {MEMO_MESSAGES, TAG_MESSAGES} from "../../constants/message.js";
 import {validateTags} from "./validators.tag.js";
-import {check, query} from "express-validator";
 
-// API 스펙에 맞춘 필드명 사용
-// title (API 스펙: 1~20자)
-export const validateTitle = check("title")
-  .trim()
-  .isLength({min: 1, max: 20})
-  .withMessage("제목은 1~20자 사이로 입력해주세요.");
+// title
+export const validateTitle = check("title").trim().isLength({max: 100}).withMessage(MEMO_MESSAGES.INVALID_TITLE_LENGTH);
 
-// memo (API 스펙: 최대 500자, content 대신 memo 사용)
-export const validateMemoContent = check("memo")
-  .optional()
-  .isString()
-  .withMessage(MEMO_MESSAGES.INVALID_CONTENT_TYPE)
-  .isLength({max: 500})
-  .withMessage("메모 내용은 최대 500자까지 입력 가능합니다.");
+// content
+export const validateContent = check("content").optional().isString().withMessage(MEMO_MESSAGES.INVALID_CONTENT_TYPE);
 
-// collectionId (API 스펙에서는 collectionId 사용, 내부적으로는 categoryId로 처리)
-export const validateCollectionId = check("collectionId")
-  .isMongoId()
-  .withMessage("유효하지 않은 컬렉션 ID입니다.");
+// categoryId
+export const validateCategoryId = validateObjectId("categoryId").optional();
 
 // keywords (tag validation과 동일한 규칙 적용)
 export const validateKeywords = check("keywords")
@@ -31,7 +19,7 @@ export const validateKeywords = check("keywords")
   .withMessage("키워드는 문자열 형식이어야 합니다.")
   .custom((value) => {
     if (value) {
-      const keywords = value.split(',').map(k => k.trim());
+      const keywords = value.split(",").map((k) => k.trim());
       // tag validation과 동일한 규칙 적용 (최대 5개, 각 15자)
       if (keywords.length > 5) {
         throw new Error(TAG_MESSAGES.TAG_LIMIT_EXCEEDED);
@@ -53,7 +41,7 @@ export const validateLinks = check("links")
   .custom((links) => {
     if (links && Array.isArray(links)) {
       for (const link of links) {
-        if (!link.startsWith('http://') && !link.startsWith('https://')) {
+        if (!link.startsWith("http://") && !link.startsWith("https://")) {
           throw new Error("링크는 HTTP 또는 HTTPS로 시작해야 합니다.");
         }
       }
@@ -68,15 +56,15 @@ export const validateMemoId = validateObjectId("memoId").notEmpty().withMessage(
 export const validateMemoIds = validateObjectIdArray("memoIds");
 
 // [Memo] - API 스펙에 맞춘 검증 규칙들
-export const validateGetMemoList = [validateCollectionId, validateMiddleware];
+export const validateGetMemoList = [validateCategoryId, validateMiddleware];
 
 export const validateCreateMemo = [
-  validateCollectionId,
+  validateCategoryId,
   validateTitle,
   validateKeywords,
-  validateMemoContent,
+  validateContent,
   validateLinks,
-  validateMiddleware
+  validateMiddleware,
 ];
 
 export const validateGetMemo = [validateMemoId, validateMiddleware];
@@ -84,10 +72,10 @@ export const validateGetMemo = [validateMemoId, validateMiddleware];
 export const validateUpdateMemo = [
   validateMemoId,
   validateTitle.optional(),
-  validateMemoContent,
+  validateContent,
   validateKeywords,
   validateLinks,
-  validateMiddleware
+  validateMiddleware,
 ];
 
 export const validateUpdateMemoFav = [
@@ -101,25 +89,7 @@ export const validateCopyMemo = [validateMemoId, validateMiddleware];
 export const validateMoveMemos = [
   validateMemoIds,
   check("categoryId").isMongoId().withMessage("유효하지 않은 카테고리 ID입니다."),
-  validateMiddleware
+  validateMiddleware,
 ];
 
-export const validateDeleteMemosQuery = [
-  query("memoIds")
-    .notEmpty()
-    .withMessage("선택한 아이템이 없습니다.")
-    .custom((value) => {
-      const ids = value.split(',');
-      if (ids.length === 0) {
-        throw new Error("선택한 아이템이 없습니다.");
-      }
-      const isValid = ids.every((item) => /^[0-9a-fA-F]{24}$/.test(item.trim()));
-      if (!isValid) {
-        throw new Error("유효하지 않은 메모 ID입니다.");
-      }
-      return true;
-    }),
-  validateMiddleware
-];
-
-export const validateDeleteMemos = validateDeleteMemosQuery;
+export const validateDeleteMemos = [validateMemoIds, validateMiddleware];
