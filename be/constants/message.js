@@ -87,6 +87,7 @@ export const MEMO_MESSAGES = {
   CREATE_SUCCESS: "메모가 성공적으로 생성되었습니다.",
   GET_SUCCESS: "메모를 성공적으로 조회했습니다.",
   GET_LIST_SUCCESS: "메모 목록을 성공적으로 조회했습니다.",
+  SEARCH_SUCCESS: "메모를 성공적으로 검색했습니다.",
   UPDATE_SUCCESS: "메모가 성공적으로 업데이트되었습니다.",
   FAVORITE_ADD_SUCCESS: "메모를 즐겨찾기에 추가했습니다.",
   FAVORITE_REMOVE_SUCCESS: "메모를 즐겨찾기에서 제거했습니다.",
