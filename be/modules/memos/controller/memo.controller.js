@@ -178,7 +178,7 @@ class MemoController {
   }
 
   async deleteMemos(req, res) {
-    const {memoIds} = req.body;
+    const memoIds = req.query.memoIds ? req.query.memoIds.split(',') : [];
     const createdBy = req.user.id;
     const data = {memoIds, createdBy};
     const memo = await this.memoService.deleteMemos(data);

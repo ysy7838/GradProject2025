@@ -2,6 +2,7 @@ import {check} from "express-validator";
 import {validateMiddleware, validateObjectId, validateObjectIdArray} from "./validators.common.js";
 import {MEMO_MESSAGES, TAG_MESSAGES} from "../../constants/message.js";
 import {validateTags} from "./validators.tag.js";
+import {check, query} from "express-validator";
 
 // API 스펙에 맞춘 필드명 사용
 // title (API 스펙: 1~20자)
@@ -103,4 +104,22 @@ export const validateMoveMemos = [
   validateMiddleware
 ];
 
-export const validateDeleteMemos = [validateMemoIds, validateMiddleware];
+export const validateDeleteMemosQuery = [
+  query("memoIds")
+    .notEmpty()
+    .withMessage("선택한 아이템이 없습니다.")
+    .custom((value) => {
+      const ids = value.split(',');
+      if (ids.length === 0) {
+        throw new Error("선택한 아이템이 없습니다.");
+      }
+      const isValid = ids.every((item) => /^[0-9a-fA-F]{24}$/.test(item.trim()));
+      if (!isValid) {
+        throw new Error("유효하지 않은 메모 ID입니다.");
+      }
+      return true;
+    }),
+  validateMiddleware
+];
+
+export const validateDeleteMemos = validateDeleteMemosQuery;
