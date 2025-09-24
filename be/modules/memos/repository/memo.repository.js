@@ -37,6 +37,10 @@ class UserRepository {
     return dbQuery.lean();
   }
 
+  async count(filter) {
+    return this.Memo.countDocuments(filter);
+  }
+
   // 수정
   async updateOne(filter, update, options = {new: true, runValidators: true}) {
     return this.Memo.findOneAndUpdate(filter, update, options).populate("tags", "_id tagName").lean();

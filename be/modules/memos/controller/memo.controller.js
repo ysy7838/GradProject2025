@@ -9,6 +9,7 @@ class MemoController {
 
     this.createMemo = asyncHandler(this.createMemo.bind(this));
     this.getMemoList = asyncHandler(this.getMemoList.bind(this));
+    this.searchMemos = asyncHandler(this.searchMemos.bind(this));
     this.updateMemoFav = asyncHandler(this.updateMemoFav.bind(this));
     this.moveMemos = asyncHandler(this.moveMemos.bind(this));
     this.deleteMemos = asyncHandler(this.deleteMemos.bind(this));
@@ -24,6 +25,7 @@ class MemoController {
     this.copyMemo = asyncHandler(this.copyMemo.bind(this));
     this.makeHashtags = asyncHandler(this.makeHashtags.bind(this));
     this.convertToVec = asyncHandler(this.convertToVec.bind(this));
+    this.recommendMemos = asyncHandler(this.recommendMemos.bind(this));
   }
 
   /* POST /api/memos/ai/text :텍스트 요약 */
@@ -155,6 +157,20 @@ class MemoController {
     });
   }
 
+  // GET /api/memos/search
+  async searchMemos(req, res) {
+    const createdBy = req.user.id;
+    const {q, isFuzzy} = req.query;
+    const data = {q, isFuzzy, createdBy};
+    const memos = await this.memoService.searchMemos(data);
+    res.status(200).json({
+      message: MEMO_MESSAGES.SEARCH_SUCCESS,
+      count: memos.length,
+      memos: memos,
+    });
+  }
+
+  // PATCH /api/memos/fav
   async updateMemoFav(req, res) {
     const {memoIds, isFavorite} = req.body;
     const createdBy = req.user.id;
@@ -237,6 +253,38 @@ class MemoController {
     res.status(200).json({
       message: MEMO_MESSAGES.CONVERT_TO_VEC_SUCCESS,
       memo: memo,
+    });
+  }
+
+  // POST /api/memos/ai-text
+  async summarizeText(req, res) {
+    const data = req.body;
+    const result = await this.memoService.summarizeText(data);
+    res.status(200).json({
+      message: MEMO_MESSAGES.SUMMARIZE_TEXT_SUCCESS,
+      result: result,
+    });
+  }
+
+  // POST /api/memos/ai-image
+  async summarizeImage(req, res) {
+    const data = req.body;
+    const result = await this.memoService.summarizeImage(data);
+    res.status(200).json({
+      message: MEMO_MESSAGES.SUMMARIZE_IMAGE_SUCCESS,
+      result: result,
+    });
+  }
+  
+  async recommendMemos(req, res) {
+    const {memoId} = req.params;
+    const createdBy = req.user.id;
+    const data = {memoId, createdBy};
+    const memos = await this.memoService.recommendMemos(data);
+    res.status(200).json({
+      message: MEMO_MESSAGES.RECOMMEND_MEMOS_SUCCESS,
+      count: memos.length,
+      memos: memos,
     });
   }
 }

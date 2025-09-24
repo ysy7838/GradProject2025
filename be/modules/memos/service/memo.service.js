@@ -2,11 +2,7 @@ import {NotFoundError, InternalServerError, BadRequestError} from "../../../util
 import {MEMO_MESSAGES} from "../../../constants/message.js";
 import {COMMON_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
-import {spawn} from "child_process";
-import path from "path";
-import {fileURLToPath} from "url";
 import axios from "axios";
-import GeminiService from "./gemini.service.js";
 
 class MemoService {
   constructor(memoRepository, tagService, elasticClient, permissionCheckHelper, geminiService) {
@@ -17,246 +13,417 @@ class MemoService {
     this.geminiService = geminiService;
   }
 
-  /* 메모 생성 */
-  async createMemo(data) {
-    const {title, content, categoryId, createdBy, tags} = data;
-    
-    // 카테고리 권한 확인
-    if (categoryId) {
-      await this.permissionCheckHelper(categoryId, createdBy);
+  // 권한 확인 헬퍼 메서드
+  async _getMemoAndCheckPermission(memoIdsOrId, createdBy, withContent = false) {
+    let queryCondition;
+    let memos;
+    const projection = withContent ? {} : {content: 0};
+
+    if (Array.isArray(memoIdsOrId)) {
+      if (memoIdsOrId.length === 0) {
+        return [];
+      }
+      queryCondition = {_id: {$in: memoIdsOrId}, createdBy};
+      memos = await this.memoRepository.find(queryCondition, projection);
+      if (memos.length !== memoIdsOrId.length) {
+        throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
+      }
+    } else {
+      queryCondition = {_id: memoIdsOrId, createdBy};
+      memos = await this.memoRepository.findOne(queryCondition, projection);
+      if (!memos) {
+        throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
+      }
     }
-
-    // 태그 처리
-    let tagIds = [];
-    if (tags && tags.length > 0) {
-      const tagPromises = tags.map(tagName => this.tagService.findOrCreateTag(tagName));
-      const createdTags = await Promise.all(tagPromises);
-      tagIds = createdTags.map(tag => tag._id);
-    }
-
-    // 메모 생성
-    const memoData = {
-      title,
-      content,
-      categoryId,
-      createdBy,
-      tags: tagIds
-    };
-
-    const newMemo = await this.memoRepository.create(memoData);
-    
-    // 태그 사용 카운트 증가
-    if (tagIds.length > 0) {
-      await this.tagService.incrementTagUsage(tagIds);
-    }
-
-    return newMemo;
-  }
-
-  /* 메모 목록 조회 */
-  async getMemoList(data) {
-    const {categoryId, createdBy} = data;
-    
-    // 카테고리 권한 확인
-    if (categoryId) {
-      await this.permissionCheckHelper(categoryId, createdBy);
-    }
-
-    const filter = {
-      createdBy,
-      ...(categoryId && {categoryId})
-    };
-
-    const memos = await this.memoRepository.find(filter, null, {sort: {updatedAt: -1}});
     return memos;
   }
 
-  /* 메모 상세 조회 */
-  async getMemoDetail(data) {
-    const {memoId, createdBy} = data;
-    const memo = await this._getMemoAndCheckPermission(memoId, createdBy);
-    return memo;
+  // 태그 처리 헬퍼 함수
+  async _processTags(tagNames) {
+    if (!tagNames || tagNames.length === 0) return [];
+
+    const tagIds = [];
+    for (const tagName of tagNames) {
+      const tag = await this.tagService.findOrCreateTag(tagName);
+      tagIds.push(tag._id);
+    }
+    return tagIds;
   }
 
-  /* 메모 수정 */
-  async updateMemo(data) {
-    const {memoId, title, content, createdBy, tags} = data;
-    
-    // 메모 권한 확인
-    const existingMemo = await this._getMemoAndCheckPermission(memoId, createdBy);
-    
-    // 기존 태그 처리
-    const oldTagIds = existingMemo.tags.map(tag => tag._id);
-    
-    // 새 태그 처리
-    let newTagIds = [];
-    if (tags && tags.length > 0) {
-      const tagPromises = tags.map(tagName => this.tagService.findOrCreateTag(tagName));
-      const createdTags = await Promise.all(tagPromises);
-      newTagIds = createdTags.map(tag => tag._id);
+  // 마크다운을 일반 텍스트로 변환하는 헬퍼 함수 -> 다른 곳에서 처리를 하는지 확인
+  // 우선 놔두기
+  async _convertMarkdownToText(markdownContent) {
+    if (!markdownContent) {
+      return "";
+    }
+    const result = await unified().use(remarkParse).use(stripMarkdown).process(markdownContent);
+    return String(result);
+  }
+
+  // 엘라스틱서치에 벡터 저장 헬퍼 함수
+  async _saveVectorToElasticsearch(memoId, memoVectors, createdBy) {
+    const indexName = "memos";
+    if (!memoVectors || memoVectors.length === 0) return;
+
+    // 기존 문서 삭제
+    try {
+      await this.elasticClient.deleteByQuery({
+        index: indexName,
+        query: {term: {memoId}},
+      });
+    } catch (err) {
+      if (!(err.meta && err.meta.statusCode === 404)) throw err;
     }
 
-    // 메모 업데이트
-    const updateData = {
-      ...(title !== undefined && {title}),
-      ...(content !== undefined && {content}),
-      tags: newTagIds
+    const body = [];
+    memoVectors.forEach((vector, i) => {
+      body.push({index: {_index: indexName, _id: `${memoId}_${i}`}});
+      body.push({
+        memoId,
+        createdBy,
+        sentenceIndex: i,
+        vector,
+        createdAt: new Date(),
+      });
+    });
+
+    const bulkResponse = await this.elasticClient.bulk({refresh: true, body});
+
+    if (bulkResponse.errors) {
+      const erroredDocuments = [];
+      bulkResponse.items.forEach((action, i) => {
+        const op = Object.keys(action)[0];
+        if (action[op].error) {
+          erroredDocuments.push({
+            status: action[op].status,
+            error: action[op].error,
+            operation: body[i * 2],
+            document: body[i * 2 + 1],
+          });
+        }
+      });
+      if (erroredDocuments.length > 0) console.error("Bulk insert errors:", erroredDocuments);
+    }
+
+    console.log(`Memo ${memoId} vectors saved to Elasticsearch (${memoVectors.length} sentences) via bulk.`);
+  }
+
+  async _processVectorization(memo) {
+    try {
+      const tagsForVectorization = memo.tags.map((tag) => tag.tagName);
+
+      const dataToSend = {
+        title: memo.title,
+        content: memo.content,
+        tags: tagsForVectorization,
+      };
+
+      const response = await axios.post("http://localhost:8000/vectorize", dataToSend);
+
+      const vectorResult = response.data;
+      await this._saveVectorToElasticsearch(memo._id, vectorResult.vectors, memo.createdBy);
+      console.log(`Vectorization and save complete for memo ID: ${memo._id}, sentences: ${vectorResult.sentenceCount}`);
+    } catch (error) {
+      console.error(`[VECTORIZATION ERROR] Failed to vectorize memo ID ${memo._id}:`, error.message);
+    }
+  }
+
+  // 엘라스틱서치 벡터 삭제 헬퍼 함수
+  async _deleteVectorsFromElasticsearch(memoIds) {
+    if (!memoIds || memoIds.length === 0) {
+      return;
+    }
+    const indexName = "memos";
+    try {
+      const response = await this.elasticClient.deleteByQuery({
+        index: indexName,
+        query: {
+          terms: {
+            memoId: memoIds,
+          },
+        },
+      });
+      console.log(
+        `Elasticsearch vectors for memo IDs ${memoIds.join(", ")} deleted. Result: ${response.deleted} documents.`
+      );
+    } catch (error) {
+      console.error(`[ELASTICSEARCH DELETE ERROR] Failed to delete vectors for memo IDs ${memoIds.join(", ")}:`, error);
+      throw new InternalServerError(COMMON_MESSAGES.DELETION_FAILED);
+    }
+  }
+
+  // 생성
+  async createMemo(data) {
+    const {title, content, categoryId, createdBy, tags} = data;
+
+    await getCategoryAndCheckPermission(categoryId, createdBy);
+    const tagIds = await this._processTags(tags);
+
+    const dataToCreate = {title, content, categoryId, createdBy, tags: tagIds};
+    try {
+      const newMemo = await this.memoRepository.create(dataToCreate);
+      const createdMemo = await this.memoRepository.findOne(newMemo._id);
+      await this.tagService.incrementTagUsage(tagIds);
+      this._processVectorization(createdMemo);
+      return createdMemo;
+    } catch (error) {
+      console.error("Error creating memo:", error);
+      throw new InternalServerError(COMMON_MESSAGES.CREATION_FAILED);
+    }
+  }
+
+  // 카테고리 내 메모 목록 조회
+  async getMemoList(data) {
+    const {categoryId, createdBy} = data;
+    await getCategoryAndCheckPermission(categoryId, createdBy);
+
+    const filter = {categoryId, createdBy};
+    const projection = {content: 0}; // content 필드 제외
+    const memos = await this.memoRepository.find(filter, projection);
+    return memos;
+  }
+
+  // 상세 조회
+  async getMemoDetail(data) {
+    const {memoId, createdBy} = data;
+    return this._getMemoAndCheckPermission(memoId, createdBy, true);
+  }
+
+  // 메모 검색
+  async searchMemos(data) {
+    const {q, isFuzzy, createdBy} = data;
+
+    if (!q) {
+      return [];
+    }
+
+    let memos;
+    const findCondition = {
+      createdBy: createdBy,
+      $or: [{title: {$regex: q, $options: "i"}}, {content: {$regex: q, $options: "i"}}],
     };
 
-    const updatedMemo = await this.memoRepository.updateOne(
-      {_id: memoId},
-      updateData
-    );
+    const tag = await this.tagService.findTagByName(q);
+    if (tag) {
+      findCondition.$or.push({tags: tag._id});
+    }
 
-    // 태그 사용 카운트 업데이트
-    if (oldTagIds.length > 0) {
-      await this.tagService.decrementTagUsage(oldTagIds);
+    const projection = {content: 0};
+    memos = await this.memoRepository.find(findCondition, projection);
+    console.log("mongodb 검색")
+    console.log(memos.length)
+    console.log(memos);
+    if (isFuzzy === "true") {
+      const memoIds = memos.map((memo) => memo._id.toString());
+      let queryVector;
+      try {
+        const response = await axios.post("http://localhost:8000/query-vector", {
+          query: q,
+        });
+        queryVector = response.data.vector;
+      } catch (error) {
+        throw new Error(`Vectorization failed: ${error.message}`);
+      }
+
+      const memoCount = await this.memoRepository.count({createdBy});
+      const kValue = 20;
+      const numCandidates = Math.max(100, kValue);
+      const searchResults = await this.elasticClient.search({
+        index: "memos",
+        fields: ["_id", "memoId", "_score"],
+        knn: {
+          field: "vector",
+          query_vector: queryVector,
+          k: kValue,
+          num_candidates: numCandidates,
+          filter: {
+            term: {createdBy: createdBy},
+          },
+        },
+        size: 1000,
+      });
+      const memoScores = {};
+      searchResults.hits.hits.forEach((hit) => {
+        if (memoIds.includes(hit.fields.memoId[0])) return;
+        const memoId = hit.fields.memoId[0];
+        const score = hit._score;
+        if (!memoScores[memoId] || score > memoScores[memoId]) {
+          memoScores[memoId] = score;
+        }
+      });
+      console.log(memoScores);
+
+      const sortedMemoIds = Object.keys(memoScores)
+        .filter((memoId) => memoScores[memoId] > 0.75)
+        .sort((a, b) => memoScores[b] - memoScores[a]);
+      const fuzzyMemos = await this._getMemoAndCheckPermission(sortedMemoIds, createdBy);
+      console.log("fuzzy 검색");
+      console.log(fuzzyMemos);
+      memos = memos.concat(fuzzyMemos);
+      console.log("전체 검색");
+      console.log(memos)
     }
-    if (newTagIds.length > 0) {
-      await this.tagService.incrementTagUsage(newTagIds);
+    return memos;
+  }
+
+  // 메모 수정
+  async updateMemo(data) {
+    const {memoId, title, content, createdBy, tags} = data;
+    const existingMemo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
+
+    if (existingMemo.tags && existingMemo.tags.length > 0) {
+      const existingTagIds = existingMemo.tags.map((tag) => tag._id.toString());
+      await this.tagService.decrementTagUsage(existingTagIds);
     }
+
+    const newTagIds = await this._processTags(tags);
+    await this.tagService.incrementTagUsage(newTagIds);
+
+    const filter = {_id: memoId, createdBy};
+    const update = {title, content, tags: newTagIds};
+    const updatedMemo = await this.memoRepository.updateOne(filter, update);
+    if (!updatedMemo) {
+      throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
+    }
+    this._processVectorization(updatedMemo);
 
     return updatedMemo;
   }
 
-  /* 메모 즐겨찾기 업데이트 */
+  // 메모 즐겨찾기 추가/삭제
   async updateMemosFav(data) {
     const {memoIds, createdBy, isFavorite} = data;
-    
-    // 메모 권한 확인
     await this._getMemoAndCheckPermission(memoIds, createdBy);
-    
-    const result = await this.memoRepository.updateMany(
-      {_id: {$in: memoIds}, createdBy},
-      {isFavorite}
-    );
-
-    return result;
+    const filter = {
+      _id: {$in: memoIds},
+      createdBy: createdBy,
+    };
+    const update = {
+      $set: {
+        isFavorite: isFavorite,
+      },
+    };
+    const updatedMemos = await this.memoRepository.updateMany(filter, update);
+    return updatedMemos;
   }
 
-  /* 메모 복사 */
+  // 메모 이동 (최소 1개)
+  async moveMemos(data) {
+    const {memoIds, categoryId, createdBy} = data;
+    await this._getMemoAndCheckPermission(memoIds, createdBy);
+    const filter = {
+      _id: {$in: memoIds},
+      createdBy: createdBy,
+    };
+    const update = {
+      $set: {
+        categoryId: categoryId,
+      },
+    };
+    const updatedMemos = await this.memoRepository.updateMany(filter, update);
+    return updatedMemos;
+  }
+
+  // 메모 이동 (카테고리별)
+  async moveMemosByCategoryIds(data) {
+    const {categoryIds, newCategoryId, createdBy} = data;
+    const filter = {
+      categoryId: {$in: categoryIds},
+      createdBy: createdBy,
+    };
+    const update = {
+      $set: {
+        categoryId: newCategoryId,
+      },
+    };
+    const updatedMemos = await this.memoRepository.updateMany(filter, update);
+    return updatedMemos;
+  }
+
+  // 메모 복사
   async copyMemo(data) {
     const {memoId, createdBy} = data;
-    
-    // 원본 메모 조회 및 권한 확인
-    const originalMemo = await this._getMemoAndCheckPermission(memoId, createdBy);
-    
-    // 복사본 생성
-    const copyData = {
-      title: `${originalMemo.title} (복사)`,
-      content: originalMemo.content,
-      categoryId: originalMemo.categoryId,
-      createdBy,
-      tags: originalMemo.tags.map(tag => tag._id)
-    };
+    const memo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
+    const title = memo.title + " copy";
+    const {content, categoryId, tags} = memo;
+    const query = {title, content, categoryId, createdBy, tags};
 
-    const copiedMemo = await this.memoRepository.create(copyData);
-    
-    // 태그 사용 카운트 증가
-    if (copyData.tags.length > 0) {
-      await this.tagService.incrementTagUsage(copyData.tags);
+    // S3에서 이미지 복사하는 로직 추가 필요
+
+    const copiedMemo = await this.memoRepository.create(query);
+
+    if (tags && tags.length > 0) {
+      await this.tagService.incrementTagUsage(tags);
     }
-
     return copiedMemo;
   }
 
-  /* 메모 이동 */
-  async moveMemos(data) {
-    const {memoIds, categoryId, createdBy} = data;
-    
-    // 메모와 대상 카테고리 권한 확인
-    await this._getMemoAndCheckPermission(memoIds, createdBy);
-    if (categoryId) {
-      await this.permissionCheckHelper(categoryId, createdBy);
-    }
-
-    const result = await this.memoRepository.updateMany(
-      {_id: {$in: memoIds}, createdBy},
-      {categoryId}
-    );
-
-    return result;
-  }
-
-  /* 카테고리별 메모 이동 */
-  async moveMemosByCategoryIds(data) {
-    const {categoryIds, newCategoryId, createdBy} = data;
-    
-    const result = await this.memoRepository.updateMany(
-      {categoryId: {$in: categoryIds}, createdBy},
-      {categoryId: newCategoryId}
-    );
-
-    return result;
-  }
-
-  /* 메모 삭제 */
+  // 메모 삭제 (최소 1개)
+  // TODO: S3 이미지 삭제 로직 추가 필요
   async deleteMemos(data) {
     const {memoIds, createdBy} = data;
-    
-    // 메모 권한 확인
-    const memos = await this._getMemoAndCheckPermission(memoIds, createdBy);
-    
-    // 태그 사용 카운트 감소
-    const allTagIds = [];
-    memos.forEach(memo => {
-      if (memo.tags && memo.tags.length > 0) {
-        allTagIds.push(...memo.tags.map(tag => tag._id));
-      }
-    });
-    
-    if (allTagIds.length > 0) {
-      await this.tagService.decrementTagUsage(allTagIds);
+    const memosToDelete = await this._getMemoAndCheckPermission(memoIds, createdBy, true);
+    if (memosToDelete.length === 0) {
+      return {deletedCount: 0};
     }
 
-    // 메모 삭제
-    const result = await this.memoRepository.deleteMany({
-      _id: {$in: memoIds},
-      createdBy
-    });
+    const memoIdsStrings = memosToDelete.map((memo) => memo._id.toString());
+    const tagIdsToDecrement = memosToDelete.flatMap((memo) =>
+      memo.tags ? memo.tags.map((tag) => tag._id.toString()) : []
+    );
 
+    const filter = {_id: {$in: memoIdsStrings}, createdBy};
+    const result = await this.memoRepository.deleteMany(filter);
+
+    if (tagIdsToDecrement.length > 0) {
+      await this.tagService.decrementTagUsage(tagIdsToDecrement);
+    }
+    await this._deleteVectorsFromElasticsearch(memoIdsStrings);
     return result;
   }
 
-  /* 카테고리별 메모 삭제 */
   async deleteMemosByCategoryIds(categoryIds) {
-    const memos = await this.memoRepository.find({categoryId: {$in: categoryIds}});
-    
-    // 태그 사용 카운트 감소
-    const allTagIds = [];
-    memos.forEach(memo => {
-      if (memo.tags && memo.tags.length > 0) {
-        allTagIds.push(...memo.tags.map(tag => tag._id));
-      }
-    });
-    
-    if (allTagIds.length > 0) {
-      await this.tagService.decrementTagUsage(allTagIds);
-    }
+    const filter = {categoryId: {$in: categoryIds}};
+    const memos = await this.memoRepository.find(filter);
+    if (memos.length === 0) return;
 
-    // 메모 삭제
-    const result = await this.memoRepository.deleteMany({categoryId: {$in: categoryIds}});
+    const memoIdsToDelete = memos.map((memo) => memo._id.toString());
+    const tagIdsToDecrement = memos.flatMap((memo) => (memo.tags ? memo.tags.map((tag) => tag._id.toString()) : []));
+
+    const result = await this.memoRepository.deleteMany(filter);
+    if (tagIdsToDecrement.length > 0) {
+      await this.tagService.decrementTagUsage(tagIdsToDecrement);
+    }
+    await this._deleteVectorsFromElasticsearch(memoIdsToDelete);
     return result;
   }
 
-  /* 해시태그 자동 생성 */
+  // 해시태그 자동 생성 => 메모 생성 시 모달을 띄워 물어본 후 생성
   async makeHashtags(memoId) {
-    // TODO: 구현 필요
-    return {message: "해시태그 생성 기능은 추후 구현 예정입니다."};
-  }
+    const query = {_id: memoId};
+    const memo = await this.memoRepository.findOne(query); // content만 필요
+    // TODO: 중간 처리 과정 필요
 
-  /* 메모 벡터 변환 */
-  async convertToVec(memoId) {
-    // TODO: 구현 필요
-    return {message: "벡터 변환 기능은 추후 구현 예정입니다."};
+    // 없는 경우 에러 처리
+
+    // markdown -> text 변환 로직 추가 필요
+    const plainText = await this._convertMarkdownToText(memo.content);
+
+    // 제미나이 요청 api 로직 -> 프론트에서는 로딩 화면 띄우기
+    // 나온 결과 유효성 검사 -> 해당 로직에서 직접 진행
+    const tags = [];
+
+    // 클라이언트로 반환 -> 이후 사용자가 수락하면 메모 수정으로 태그 추가
+
+    return memo;
   }
 
   /* 텍스트 요약 - Gemini AI */
   async summarizeText(data) {
     try {
       // content만 전달
-      const content = typeof data === 'string' ? data : data.content;
-      if (!content || typeof content !== 'string') {
+      const content = typeof data === "string" ? data : data.content;
+      if (!content || typeof content !== "string") {
         throw new BadRequestError("요약할 텍스트 내용이 제공되지 않았습니다.");
       }
       const result = await this.geminiService.summarizeText(content);
@@ -266,16 +433,15 @@ class MemoService {
         originalLength: result.originalLength,
         summaryLength: result.summaryLength,
         type: "text",
-        timestamp: result.timestamp
+        timestamp: result.timestamp,
       };
-
     } catch (error) {
       console.error("Text summarization error:", error);
-      
+
       if (error instanceof BadRequestError) {
         throw error;
       }
-      
+
       throw new InternalServerError("텍스트 요약 처리 중 오류가 발생했습니다.");
     }
   }
@@ -283,7 +449,7 @@ class MemoService {
   /* 이미지 요약 - Gemini Vision AI */
   async summarizeImage(data) {
     try {
-      const { imageData } = data;
+      const {imageData} = data;
       if (!imageData) {
         throw new BadRequestError("요약할 이미지 데이터가 제공되지 않았습니다.");
       }
@@ -292,10 +458,7 @@ class MemoService {
         throw new BadRequestError("이미지 데이터 형식이 올바르지 않습니다. data와 mimeType이 필요합니다.");
       }
       // 지원하는 이미지 형식 검증
-      const supportedMimeTypes = [
-        'image/jpeg', 'image/jpg', 'image/png', 
-        'image/gif', 'image/webp', 'image/bmp'
-      ];
+      const supportedMimeTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/bmp"];
       if (!supportedMimeTypes.includes(imageData.mimeType.toLowerCase())) {
         throw new BadRequestError("지원하지 않는 이미지 형식입니다. JPEG, PNG, GIF, WebP, BMP만 지원됩니다.");
       }
@@ -306,16 +469,15 @@ class MemoService {
         imageType: result.imageType,
         summaryLength: result.summaryLength,
         type: "image",
-        timestamp: result.timestamp
+        timestamp: result.timestamp,
       };
-
     } catch (error) {
       console.error("Image summarization error:", error);
-      
+
       if (error instanceof BadRequestError) {
         throw error;
       }
-      
+
       throw new InternalServerError("이미지 요약 처리 중 오류가 발생했습니다.");
     }
   }
@@ -323,30 +485,30 @@ class MemoService {
   /* S3 업로드와 함께 이미지 요약 */
   async summarizeImageWithS3(data) {
     try {
-      const { imageData, s3Url, memoId, createdBy } = data;
-      
+      const {imageData, s3Url, memoId, createdBy} = data;
+
       // 1. 이미지 요약 생성
       const summaryResult = await this.geminiService.summarizeImage(imageData);
-      
+
       // 2. 메모가 있다면 이미지 URL 저장
       if (memoId) {
         const memo = await this._getMemoAndCheckPermission(memoId, createdBy);
-        
+
         // 메모에 이미지 URL 추가 (images 필드 추가 필요)
         const updatedMemo = await this.memoRepository.updateOne(
-          { _id: memoId },
-          { 
-            $push: { 
+          {_id: memoId},
+          {
+            $push: {
               images: {
                 url: s3Url,
                 summary: summaryResult.summary,
-                uploadedAt: new Date()
-              }
-            }
+                uploadedAt: new Date(),
+              },
+            },
           }
         );
       }
-      
+
       return {
         success: true,
         summary: summaryResult.summary,
@@ -354,16 +516,15 @@ class MemoService {
         imageType: summaryResult.imageType,
         summaryLength: summaryResult.summaryLength,
         type: "image",
-        timestamp: summaryResult.timestamp
+        timestamp: summaryResult.timestamp,
       };
-
     } catch (error) {
       console.error("Image summarization with S3 error:", error);
-      
+
       if (error instanceof BadRequestError) {
         throw error;
       }
-      
+
       throw new InternalServerError("이미지 요약 처리 중 오류가 발생했습니다.");
     }
   }
@@ -371,7 +532,7 @@ class MemoService {
   /* 다중 이미지 요약 (이미지 그룹용) */
   async summarizeMultipleImages(data) {
     try {
-      const { imageDataArray } = data;
+      const {imageDataArray} = data;
       if (!Array.isArray(imageDataArray) || imageDataArray.length === 0) {
         throw new BadRequestError("요약할 이미지 배열이 제공되지 않았습니다.");
       }
@@ -392,16 +553,15 @@ class MemoService {
         imageCount: result.imageCount,
         summaryLength: result.summaryLength,
         type: "multiple_images",
-        timestamp: result.timestamp
+        timestamp: result.timestamp,
       };
-
     } catch (error) {
       console.error("Multiple images summarization error:", error);
-      
+
       if (error instanceof BadRequestError) {
         throw error;
       }
-      
+
       throw new InternalServerError("다중 이미지 요약 처리 중 오류가 발생했습니다.");
     }
   }
@@ -409,7 +569,7 @@ class MemoService {
   /* 메모 내용 요약 (텍스트 및 이미지 통합 요약) */
   async summarizeMemoText(data) {
     try {
-      const { memoId, createdBy } = data;
+      const {memoId, createdBy} = data;
 
       // 메모 조회 및 권한 확인
       const memo = await this._getMemoAndCheckPermission(memoId, createdBy);
@@ -420,7 +580,7 @@ class MemoService {
 
       let textSummary = null;
       let imageSummaries = [];
-      
+
       // 텍스트 요약
       if (memo.content && memo.content.trim().length > 0) {
         textSummary = await this.summarizeText(memo.content);
@@ -430,12 +590,12 @@ class MemoService {
       if (memo.images && memo.images.length > 0) {
         if (memo.images.length === 1) {
           const imageSummary = await this.summarizeImage({
-            imageData: memo.images[0]
+            imageData: memo.images[0],
           });
           imageSummaries.push(imageSummary);
         } else {
           const multiImageSummary = await this.summarizeMultipleImages({
-            imageDataArray: memo.images
+            imageDataArray: memo.images,
           });
           imageSummaries.push(multiImageSummary);
         }
@@ -450,15 +610,15 @@ class MemoService {
           id: memo._id,
           title: memo.title,
           hasContent: !!textSummary,
-          imageCount: memo.images ? memo.images.length : 0
-        }
+          imageCount: memo.images ? memo.images.length : 0,
+        },
       };
 
       if (textSummary) {
         combinedSummary.textSummary = {
           summary: textSummary.summary,
           originalLength: textSummary.originalLength,
-          summaryLength: textSummary.summaryLength
+          summaryLength: textSummary.summaryLength,
         };
       }
 
@@ -467,37 +627,97 @@ class MemoService {
       }
 
       return combinedSummary;
-
     } catch (error) {
       console.error("Memo text summarization error:", error);
-      
+
       if (error instanceof BadRequestError || error instanceof NotFoundError) {
         throw error;
       }
-      
+
       throw new InternalServerError("메모 텍스트 요약 중 오류가 발생했습니다.");
     }
   }
 
-  // 권한 확인 헬퍼 메서드
-  async _getMemoAndCheckPermission(memoIdsOrId, createdBy) {
-    let queryCondition;
-    let memos;
-
-    if (Array.isArray(memoIdsOrId)) {
-      queryCondition = {_id: {$in: memoIdsOrId}, createdBy};
-      memos = await this.memoRepository.find(queryCondition);
-      if (memos.length !== memoIdsOrId.length) {
-        throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
-      }
-    } else {
-      queryCondition = {_id: memoIdsOrId, createdBy};
-      memos = await this.memoRepository.findOne(queryCondition);
-      if (!memos) {
-        throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
-      }
+  // 추천
+  async recommendMemos(data) {
+    const {memoId, createdBy} = data;
+    if (!memoId) {
+      return [];
     }
-    return memos;
+
+    // 1. 기준 메모의 모든 문장 벡터 조회
+    const referenceVectors = await this.elasticClient.search({
+      index: "memos",
+      query: {
+        bool: {
+          filter: [{term: {createdBy: createdBy}}, {term: {memoId: memoId}}],
+        },
+      },
+      _source: ["vector"],
+    });
+
+    const hits = referenceVectors.hits.hits;
+    if (hits.length === 0) {
+      console.warn(`No vectors found for memoId: ${memoId}`);
+      return [];
+    }
+
+    // 2. 문장 벡터들의 평균을 계산하여 단일 쿼리 벡터 생성
+    const sumVector = new Array(hits[0]._source.vector.length).fill(0);
+    hits.forEach((hit) => {
+      const vector = hit._source.vector;
+      for (let i = 0; i < vector.length; i++) {
+        sumVector[i] += vector[i];
+      }
+    });
+    const avgVector = sumVector.map((value) => value / hits.length);
+
+    // 3. 평균 벡터를 사용하여 유사한 메모 검색
+    const memoCount = await this.memoRepository.count({createdBy});
+    const kValue = 20;
+    const numCandidates = Math.max(memoCount, kValue);
+    const searchResults = await this.elasticClient.search({
+      index: "memos",
+      fields: ["_id", "memoId", "_score"],
+      knn: {
+        field: "vector",
+        query_vector: avgVector,
+        k: kValue,
+        num_candidates: numCandidates,
+        filter: {
+          bool: {
+            must: {term: {createdBy: createdBy}},
+            must_not: {term: {memoId: memoId}},
+          },
+        },
+      },
+      size: 1000,
+    });
+
+    // 5. 검색 결과 정제 및 정렬
+    const memoScores = {};
+    searchResults.hits.hits.forEach((hit) => {
+      const recommendedMemoId = hit.fields.memoId[0];
+      const score = hit._score;
+      if (!memoScores[recommendedMemoId] || score > memoScores[recommendedMemoId]) {
+        memoScores[recommendedMemoId] = score;
+      }
+    });
+
+    const sortedMemoIds = Object.keys(memoScores)
+      .filter((id) => memoScores[id] > 0.65)
+      .sort((a, b) => memoScores[b] - memoScores[a])
+      .slice(0, 3);
+
+    console.log("Recommended Memo IDs:", memoScores);
+
+    // 6. MongoDB에서 최종 메모 조회 및 반환
+    const recommendedMemos = await this._getMemoAndCheckPermission(sortedMemoIds, createdBy, true);
+    const sortedRecommendedMemos = sortedMemoIds
+      .map((id) => recommendedMemos.find((memo) => memo._id.toString() === id))
+      .filter((memo) => memo);
+
+    return sortedRecommendedMemos;
   }
 }
 

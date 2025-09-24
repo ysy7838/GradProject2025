@@ -58,6 +58,9 @@ export default (memoController) => {
   // 메모 목록 조회
   router.get("/", authenticate, validateGetMemoList, memoController.getMemoList);
 
+  // 메모 목록 조회
+  router.get("/search", authenticate, memoController.searchMemos);
+
   // 메모 즐겨찾기 추가/삭제
   router.patch("/fav", authenticate, validateUpdateMemoFav, memoController.updateMemoFav);
 
@@ -84,16 +87,16 @@ export default (memoController) => {
   router.get("/:memoId", authenticate, validateGetMemo, memoController.getMemoDetail);
 
   // 메모 1개 수정
-  router.put("/:memoId", authenticate, validateUpdateMemo, memoController.updateMemo);
+  router.patch("/:memoId", authenticate, validateUpdateMemo, memoController.updateMemo);
 
   // 메모 복사
   router.post("/:memoId/copy", authenticate, validateCopyMemo, memoController.copyMemo);
 
   // 해시태그 자동 생성
-  router.patch("/:memoId/recommend-tags", authenticate, memoController.makeHashtags);
+  router.get("/:memoId/recommend-tags", authenticate, memoController.makeHashtags);
 
-  // 특정 메모의 텍스트 요약
-  router.post("/:memoId/ai/text", authenticate, validateSummarizeMemoText, memoController.summarizeMemoText);
+  // 유사 메모 추천
+  router.get("/:memoId/recommend-memos", authenticate, memoController.recommendMemos);
 
   return router;
 };
