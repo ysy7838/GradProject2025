@@ -82,10 +82,6 @@ class UserRepository {
   async deleteUserMemos(userId) {
     return this.Memo.deleteMany({createdBy: userId});
   }
-
-  async deleteUserMemoFavorites(userId) {
-    return this.MemoFavorite.deleteMany({userId: userId});
-  }
 }
 
 export default UserRepository;

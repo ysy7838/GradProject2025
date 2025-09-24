@@ -193,16 +193,15 @@ class UserService {
   // --- 회원탈퇴 --- (즉시 탈퇴 및 모든 데이터 삭제)
   async deleteUser(data) {
     const {userId} = data;
+    console.log(`userId: ${userId}`);
+
     const user = await this.userRepository.findById(userId);
     if (!user) {
       throw new NotFoundError(AUTH_MESSAGES.USER_INFO_NOT_FOUND);
     }
-
-    await this.userRepository.deleteUserMemoFavorites(user._id);
     await this.userRepository.deleteUserMemos(user._id);
     await this.userRepository.deleteUserCategories(user._id);
     await this.userRepository.deleteOne({_id: user._id});
-
     return true;
   }
 

@@ -20,7 +20,7 @@ export default (userController) => {
   router.post("/signup", validateSignup, userController.createUser);
 
   // 회원탈퇴
-  router.delete("/delete", userController.deleteUser);
+  router.delete("/delete", authenticate, userController.deleteUser);
 
   // 로그인&로그아웃
   router.post("/login", validateLogin, userController.loginUser);
