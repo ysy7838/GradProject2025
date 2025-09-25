@@ -174,12 +174,26 @@ class MemoService {
 
   // 카테고리 내 메모 목록 조회
   async getMemoList(data) {
-    const {categoryId, createdBy} = data;
+    const allowedSortKeys = ["title", "createdAt", "updatedAt"];
+    const allowedSortOrders = ["asc", "desc"];
+
+      const {
+        categoryId,
+        createdBy,
+        sortKey: requestedSortKey = "updatedAt",
+        sortOrder: requestedSortOrder = "desc",
+      } = data;
     await getCategoryAndCheckPermission(categoryId, createdBy);
 
+    const sortKey = allowedSortKeys.includes(requestedSortKey) ? requestedSortKey : "updatedAt";
+    const sortOrder = allowedSortOrders.includes(requestedSortOrder) ? requestedSortOrder : "desc";
     const filter = {categoryId, createdBy};
-    const projection = {content: 0}; // content 필드 제외
-    const memos = await this.memoRepository.find(filter, projection);
+    const projection = {content: 0};
+    const options = {
+      sort: {[sortKey]: sortOrder},
+    };
+
+    const memos = await this.memoRepository.find(filter, projection, options);
     return memos;
   }
 
@@ -210,8 +224,8 @@ class MemoService {
 
     const projection = {content: 0};
     memos = await this.memoRepository.find(findCondition, projection);
-    console.log("mongodb 검색")
-    console.log(memos.length)
+    console.log("mongodb 검색");
+    console.log(memos.length);
     console.log(memos);
     if (isFuzzy === "true") {
       const memoIds = memos.map((memo) => memo._id.toString());
@@ -261,7 +275,7 @@ class MemoService {
       console.log(fuzzyMemos);
       memos = memos.concat(fuzzyMemos);
       console.log("전체 검색");
-      console.log(memos)
+      console.log(memos);
     }
     return memos;
   }
@@ -401,7 +415,8 @@ class MemoService {
   // 해시태그 자동 생성 => 메모 생성 시 모달을 띄워 물어본 후 생성
   async makeHashtags(memoId) {
     const query = {_id: memoId};
-    const memo = await this.memoRepository.findOne(query); // content만 필요
+    let memo = await this.memoRepository.findOne(query); // content만 필요
+
     // TODO: 중간 처리 과정 필요
 
     // 없는 경우 에러 처리
@@ -414,7 +429,6 @@ class MemoService {
     const tags = [];
 
     // 클라이언트로 반환 -> 이후 사용자가 수락하면 메모 수정으로 태그 추가
-
     return memo;
   }
 

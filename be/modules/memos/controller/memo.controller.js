@@ -147,8 +147,8 @@ class MemoController {
 
   async getMemoList(req, res) {
     const createdBy = req.user.id;
-    const {categoryId} = req.query;
-    const data = {categoryId, createdBy};
+    const {categoryId, sortKey, sortOrder} = req.query;
+    const data = {categoryId, createdBy, sortKey, sortOrder};
     const memos = await this.memoService.getMemoList(data);
     res.status(200).json({
       message: MEMO_MESSAGES.GET_LIST_SUCCESS,
