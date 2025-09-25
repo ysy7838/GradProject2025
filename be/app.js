@@ -54,10 +54,10 @@ const PORT = process.env.PORT || 3000;
 const startServer = async () => {
   await mongoConnect();
   await elasticConnect();
-  
+
   // S3Client 초기화
   const s3Client = new S3Client({
-    region: process.env.S3_REGION || process.env.AWS_REGION || 'ap-northeast-2',
+    region: process.env.S3_REGION || process.env.AWS_REGION || "ap-northeast-2",
     credentials: {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
@@ -80,7 +80,14 @@ const startServer = async () => {
   const tagService = new TagService(tagRepository);
   const fileService = new FileService(s3Client);
   const geminiService = new GeminiService();
-  const memoService = new MemoService(memoRepository, tagService, elasticClient, permissionCheckHelper, geminiService);
+  const memoService = new MemoService(
+    memoRepository,
+    tagService,
+    fileService,
+    elasticClient,
+    permissionCheckHelper,
+    geminiService
+  );
   const categoryService = new CategoryService(categoryRepository, memoService, permissionCheckHelper);
 
   const userController = new UserController(userService);
