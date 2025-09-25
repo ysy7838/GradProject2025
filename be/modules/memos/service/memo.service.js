@@ -1,8 +1,9 @@
-import {NotFoundError, InternalServerError, BadRequestError} from "../../../utils/customError.js";
+import {NotFoundError, InternalServerError, BadRequestError, ExternalServiceError} from "../../../utils/customError.js";
 import {MEMO_MESSAGES} from "../../../constants/message.js";
 import {COMMON_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
 import axios from "axios";
+import {htmlToText} from "html-to-text";
 import * as cheerio from "cheerio";
 
 class MemoService {
@@ -52,14 +53,22 @@ class MemoService {
     return tagIds;
   }
 
-  // HTML을 일반 텍스트로 변환하는 헬퍼 함수 -> 다른 곳에서 처리를 하는지 확인
-  // 우선 놔두기
-  async _convertMarkdownToText(markdownContent) {
-    if (!markdownContent) {
+  // HTML > 평문 변경 헬퍼 함수
+  async _convertHtmlToText(htmlContent) {
+    if (!htmlContent) {
       return "";
     }
-    const result = await unified().use(remarkParse).use(stripMarkdown).process(markdownContent);
-    return String(result);
+    try {
+      const plainText = htmlToText(htmlContent, {
+        wordwrap: false,
+        ignoreImage: true,
+        ignoreHref: true,
+      });
+      return plainText.trim();
+    } catch (error) {
+      console.error("HTML conversion error:", error);
+      return htmlContent;
+    }
   }
 
   // 엘라스틱서치에 벡터 저장 헬퍼 함수
@@ -106,8 +115,6 @@ class MemoService {
       });
       if (erroredDocuments.length > 0) console.error("Bulk insert errors:", erroredDocuments);
     }
-
-    console.log(`Memo ${memoId} vectors saved to Elasticsearch (${memoVectors.length} sentences) via bulk.`);
   }
 
   async _processVectorization(memo) {
@@ -124,9 +131,8 @@ class MemoService {
 
       const vectorResult = response.data;
       await this._saveVectorToElasticsearch(memo._id, vectorResult.vectors, memo.createdBy);
-      console.log(`Vectorization and save complete for memo ID: ${memo._id}, sentences: ${vectorResult.sentenceCount}`);
     } catch (error) {
-      console.error(`[VECTORIZATION ERROR] Failed to vectorize memo ID ${memo._id}:`, error.message);
+      throw new Error(`Failed to vectorize memo ID ${memo._id}: ${error.message}`);
     }
   }
 
@@ -213,7 +219,7 @@ class MemoService {
   async getMemoDetail(data) {
     const {memoId, createdBy} = data;
     const memo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
-
+    
     if (memo.content) {
       const $ = cheerio.load(memo.content);
       const imgPromises = [];
@@ -297,17 +303,12 @@ class MemoService {
           memoScores[memoId] = score;
         }
       });
-      console.log(memoScores);
 
       const sortedMemoIds = Object.keys(memoScores)
         .filter((memoId) => memoScores[memoId] > 0.75)
         .sort((a, b) => memoScores[b] - memoScores[a]);
       const fuzzyMemos = await this._getMemoAndCheckPermission(sortedMemoIds, createdBy);
-      console.log("fuzzy 검색");
-      console.log(fuzzyMemos);
       memos = memos.concat(fuzzyMemos);
-      console.log("전체 검색");
-      console.log(memos);
     }
     return memos;
   }
@@ -457,21 +458,41 @@ class MemoService {
   // 해시태그 자동 생성 => 메모 생성 시 모달을 띄워 물어본 후 생성
   async makeHashtags(memoId) {
     const query = {_id: memoId};
-    let memo = await this.memoRepository.findOne(query); // content만 필요
+    let memo = await this.memoRepository.findOne(query);
+    if (!memo) {
+      throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
+    }
 
-    // TODO: 중간 처리 과정 필요
+    // 마크다운을 평문으로 변환
+    const plainText = await this._convertHtmlToText(memo.content);
 
-    // 없는 경우 에러 처리
+    // Gemini AI를 사용하여 태그 생성
+    const prompt = `다음 텍스트를 분석하고 콤마로 구분된 관련 해시태그 5개를 생성하라. 해시태그 앞에 #를 붙이지 말고, 각 태그는 1-15자 사이의 길이여야 한다. 각각의 태그는 중복되는 단어가 없도록 처리해라. 현재 문맥과 가장 연관성이 높은 키워드를 선택하라:\n\n${plainText}`;
 
-    // markdown -> text 변환 로직 추가 필요
-    const plainText = await this._convertMarkdownToText(memo.content);
+    try {
+      const result = await this.geminiService.textModel.generateContent(prompt);
+      const response = await result.response;
+      const suggestedTags = response
+        .text()
+        .split(",")
+        .map((tag) => tag.trim());
 
-    // 제미나이 요청 api 로직 -> 프론트에서는 로딩 화면 띄우기
-    // 나온 결과 유효성 검사 -> 해당 로직에서 직접 진행
-    const tags = [];
+      // 태그 유효성 검사 및 정제
+      const validTags = suggestedTags
+        .filter((tag) => {
+          if (tag.length < 1 || tag.length > 15) return false;
+          return true;
+        })
+        .map((tag) => tag.toLowerCase());
 
-    // 클라이언트로 반환 -> 이후 사용자가 수락하면 메모 수정으로 태그 추가
-    return memo;
+      return {
+        memo,
+        suggestedTags: validTags,
+      };
+    } catch (error) {
+      console.error("Gemini API error during hashtag generation:", error);
+      throw new ExternalServiceError("해시태그 생성 중 오류가 발생했습니다.");
+    }
   }
 
   /* 텍스트 요약 - Gemini AI */

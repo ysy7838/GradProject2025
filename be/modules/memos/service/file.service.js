@@ -35,7 +35,7 @@ class FileService {
         Key: key,
         ContentType: fileType,
       });
-
+      
       const presignedUrl = await getSignedUrl(this.s3Client, command, {expiresIn: 600});
       return {presignedUrl, key};
     } catch (error) {
@@ -44,6 +44,18 @@ class FileService {
     }
   }
 
+  // 업로드 직후 확인용 Pre-signed URL 생성
+  async getPresignedUrlForDisplay(key, expiresIn = 3600) {
+    const bucketName = process.env.S3_BUCKET_NAME;
+
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    return await this._createPresignedUrl(command, expiresIn);
+  }
+  
   // 이미지를 S3에 직접 업로드
   async uploadImageToS3(data) {
     const {buffer, key, contentType} = data;
