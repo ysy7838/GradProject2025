@@ -90,7 +90,6 @@ class MemoController {
       result: result,
     });
   }
-}
 
   async createMemo(req, res) {
     const {title, content, categoryId, tags, images} = req.body;
