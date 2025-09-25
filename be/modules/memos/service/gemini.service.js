@@ -1,9 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ExternalServiceError, BadRequestError } from "../../../utils/customError.js";
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import stripMarkdown from "strip-markdown";
-import remarkStringify from "remark-stringify";
 
 class GeminiService {
   constructor() {
@@ -15,18 +11,20 @@ class GeminiService {
   /**
    * 마크다운 텍스트를 평문으로 변환
    */
-  async _convertMarkdownToText(markdownContent) {
+  async _convertHtmlToText(htmlContent) {
+    if (!htmlContent) {
+      return "";
+    }
     try {
-      const result = await unified()
-        .use(remarkParse)
-        .use(stripMarkdown)
-        .use(remarkStringify)  // compiler 추가
-        .process(markdownContent);
-      return result.toString().trim();
+      const plainText = htmlToText(htmlContent, {
+        wordwrap: false,
+        ignoreImage: true,
+        ignoreHref: true,
+      });
+      return plainText.trim();
     } catch (error) {
-      console.error("Markdown conversion error:", error);
-      // 변환 실패 시 원본 반환
-      return markdownContent; 
+      console.error("HTML conversion error:", error);
+      return htmlContent;
     }
   }
 
@@ -52,7 +50,7 @@ class GeminiService {
   async summarizeText(content) {
     try {
       // 마크다운을 평문으로 변환 (async로 변경)
-      const plainText = await this._convertMarkdownToText(content);
+      const plainText = await this._convertHtmlToText(content);
       
       // 텍스트 길이 검증
       this._validateTextLength(plainText);
