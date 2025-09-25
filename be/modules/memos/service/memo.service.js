@@ -1,12 +1,9 @@
-import {NotFoundError, InternalServerError, BadRequestError} from "../../../utils/customError.js";
+import {NotFoundError, InternalServerError, BadRequestError, ExternalServiceError} from "../../../utils/customError.js";
 import {MEMO_MESSAGES} from "../../../constants/message.js";
 import {COMMON_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
 import axios from "axios";
-import {unified} from "unified";
-import remarkParse from "remark-parse";
-import stripMarkdown from "strip-markdown";
-import remarkStringify from "remark-stringify";
+import {htmlToText} from "html-to-text";
 
 class MemoService {
   constructor(memoRepository, tagService, elasticClient, permissionCheckHelper, geminiService) {
@@ -54,23 +51,21 @@ class MemoService {
     return tagIds;
   }
 
-  // 마크다운을 일반 텍스트로 변환하는 헬퍼 함수 -> 다른 곳에서 처리를 하는지 확인
-  // 우선 놔두기
-  async _convertMarkdownToText(markdownContent) {
-    if (!markdownContent) {
+  // HTML > 평문 변경 헬퍼 함수
+  async _convertHtmlToText(htmlContent) {
+    if (!htmlContent) {
       return "";
     }
     try {
-      const result = await unified()
-        .use(remarkParse)
-        .use(stripMarkdown)
-        .use(remarkStringify)  // compiler 추가
-        .process(markdownContent);
-      return result.toString().trim();
+      const plainText = htmlToText(htmlContent, {
+        wordwrap: false,
+        ignoreImage: true,
+        ignoreHref: true,
+      });
+      return plainText.trim();
     } catch (error) {
-      console.error("Markdown conversion error:", error);
-      // 변환 실패 시 원본 반환
-      return markdownContent;
+      console.error("HTML conversion error:", error);
+      return htmlContent;
     }
   }
 
@@ -118,7 +113,6 @@ class MemoService {
       });
       if (erroredDocuments.length > 0) console.error("Bulk insert errors:", erroredDocuments);
     }
-
   }
 
   async _processVectorization(memo) {
@@ -189,12 +183,12 @@ class MemoService {
     const allowedSortKeys = ["title", "createdAt", "updatedAt"];
     const allowedSortOrders = ["asc", "desc"];
 
-      const {
-        categoryId,
-        createdBy,
-        sortKey: requestedSortKey = "updatedAt",
-        sortOrder: requestedSortOrder = "desc",
-      } = data;
+    const {
+      categoryId,
+      createdBy,
+      sortKey: requestedSortKey = "updatedAt",
+      sortOrder: requestedSortOrder = "desc",
+    } = data;
     await getCategoryAndCheckPermission(categoryId, createdBy);
 
     const sortKey = allowedSortKeys.includes(requestedSortKey) ? requestedSortKey : "updatedAt";
@@ -213,30 +207,30 @@ class MemoService {
   async getMemoDetail(data) {
     const {memoId, createdBy} = data;
     const memo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
-    
+
     // 이미지가 있으면 Pre-signed URL 생성
     if (memo.images && memo.images.length > 0) {
       const imagesWithUrls = await Promise.all(
         memo.images.map(async (image) => {
           if (image.s3Key) {
-            const presignedUrl = await this.fileService.getPresignedUrlForDownload({ 
-              key: image.s3Key 
+            const presignedUrl = await this.fileService.getPresignedUrlForDownload({
+              key: image.s3Key,
             });
             return {
               ...image,
-              url: presignedUrl  // 동적으로 생성된 URL 추가
+              url: presignedUrl, // 동적으로 생성된 URL 추가
             };
           }
           return image;
         })
       );
-      
+
       return {
         ...memo,
-        images: imagesWithUrls
+        images: imagesWithUrls,
       };
     }
-    
+
     return memo;
   }
 
@@ -448,33 +442,35 @@ class MemoService {
   async makeHashtags(memoId) {
     const query = {_id: memoId};
     let memo = await this.memoRepository.findOne(query);
-
     if (!memo) {
       throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
     }
 
     // 마크다운을 평문으로 변환
-    const plainText = await this._convertMarkdownToText(memo.content);
+    const plainText = await this._convertHtmlToText(memo.content);
 
     // Gemini AI를 사용하여 태그 생성
-    const prompt = `다음 텍스트를 분석하고 콤마로 구분된 관련 해시태그 5개를 추출해주세요. 해시태그 앞에 #를 붙이지 말고, 각 태그는 1-15자 사이의 길이여야 합니다. 현재 문맥과 가장 연관성이 높은 키워드를 선택해주세요:\n\n${plainText}`;
+    const prompt = `다음 텍스트를 분석하고 콤마로 구분된 관련 해시태그 5개를 생성하라. 해시태그 앞에 #를 붙이지 말고, 각 태그는 1-15자 사이의 길이여야 한다. 각각의 태그는 중복되는 단어가 없도록 처리해라. 현재 문맥과 가장 연관성이 높은 키워드를 선택하라:\n\n${plainText}`;
 
     try {
       const result = await this.geminiService.textModel.generateContent(prompt);
       const response = await result.response;
-      const suggestedTags = response.text().split(',').map(tag => tag.trim());
+      const suggestedTags = response
+        .text()
+        .split(",")
+        .map((tag) => tag.trim());
 
       // 태그 유효성 검사 및 정제
-      const validTags = suggestedTags.filter(tag => {
-        // 길이 검사 (1-15자)
-        if (tag.length < 1 || tag.length > 15) return false;
-        // 특수문자 제거 및 소문자 변환
-        return true;
-      }).map(tag => tag.toLowerCase());
+      const validTags = suggestedTags
+        .filter((tag) => {
+          if (tag.length < 1 || tag.length > 15) return false;
+          return true;
+        })
+        .map((tag) => tag.toLowerCase());
 
       return {
         memo,
-        suggestedTags: validTags
+        suggestedTags: validTags,
       };
     } catch (error) {
       console.error("Gemini API error during hashtag generation:", error);
@@ -565,16 +561,16 @@ class MemoService {
             $push: {
               images: {
                 url: s3Url,
-                s3Key: s3Key,  // S3 키 저장
+                s3Key: s3Key, // S3 키 저장
                 summary: summaryResult.summary,
                 uploadedAt: new Date(),
                 metadata: {
-                  size: imageData.data.length,  // base64 크기
+                  size: imageData.data.length, // base64 크기
                   mimeType: imageData.mimeType,
-                  originalName: data.originalName
-                }
-              }
-            }
+                  originalName: data.originalName,
+                },
+              },
+            },
           }
         );
       }
@@ -587,7 +583,7 @@ class MemoService {
         imageType: summaryResult.imageType,
         summaryLength: summaryResult.summaryLength,
         type: "image",
-        timestamp: summaryResult.timestamp
+        timestamp: summaryResult.timestamp,
       };
     } catch (error) {
       throw error;

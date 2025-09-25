@@ -8,8 +8,8 @@ import remarkStringify from "remark-stringify";
 class GeminiService {
   constructor() {
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    this.textModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    this.visionModel = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    this.textModel = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+    this.visionModel = this.genAI.getGenerativeModel({model: "gemini-2.5-flash-lite"});
   }
 
   /**
