@@ -9,7 +9,7 @@ class GeminiService {
   }
 
   /**
-   * 마크다운 텍스트를 평문으로 변환
+   * HTML 텍스트를 평문으로 변환
    */
   async _convertHtmlToText(htmlContent) {
     if (!htmlContent) {
