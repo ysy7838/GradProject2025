@@ -200,7 +200,32 @@ class MemoService {
   // 상세 조회
   async getMemoDetail(data) {
     const {memoId, createdBy} = data;
-    return this._getMemoAndCheckPermission(memoId, createdBy, true);
+    const memo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
+    
+    // 이미지가 있으면 Pre-signed URL 생성
+    if (memo.images && memo.images.length > 0) {
+      const imagesWithUrls = await Promise.all(
+        memo.images.map(async (image) => {
+          if (image.s3Key) {
+            const presignedUrl = await this.fileService.getPresignedUrlForDownload({ 
+              key: image.s3Key 
+            });
+            return {
+              ...image,
+              url: presignedUrl  // 동적으로 생성된 URL 추가
+            };
+          }
+          return image;
+        })
+      );
+      
+      return {
+        ...memo,
+        images: imagesWithUrls
+      };
+    }
+    
+    return memo;
   }
 
   // 메모 검색
@@ -499,26 +524,32 @@ class MemoService {
   /* S3 업로드와 함께 이미지 요약 */
   async summarizeImageWithS3(data) {
     try {
-      const {imageData, s3Url, memoId, createdBy} = data;
+      const {imageData, s3Url, s3Key, memoId, createdBy} = data;
 
       // 1. 이미지 요약 생성
       const summaryResult = await this.geminiService.summarizeImage(imageData);
 
-      // 2. 메모가 있다면 이미지 URL 저장
+      // 2. 메모가 있다면 이미지 정보 저장
       if (memoId) {
         const memo = await this._getMemoAndCheckPermission(memoId, createdBy);
 
-        // 메모에 이미지 URL 추가 (images 필드 추가 필요)
+        // 메모에 이미지 정보 추가 (s3Key 포함)
         const updatedMemo = await this.memoRepository.updateOne(
           {_id: memoId},
           {
             $push: {
               images: {
                 url: s3Url,
+                s3Key: s3Key,  // S3 키 저장
                 summary: summaryResult.summary,
                 uploadedAt: new Date(),
-              },
-            },
+                metadata: {
+                  size: imageData.data.length,  // base64 크기
+                  mimeType: imageData.mimeType,
+                  originalName: data.originalName
+                }
+              }
+            }
           }
         );
       }
@@ -527,19 +558,15 @@ class MemoService {
         success: true,
         summary: summaryResult.summary,
         imageUrl: s3Url,
+        s3Key: s3Key,
         imageType: summaryResult.imageType,
         summaryLength: summaryResult.summaryLength,
         type: "image",
-        timestamp: summaryResult.timestamp,
+        timestamp: summaryResult.timestamp
       };
     } catch (error) {
       console.error("Image summarization with S3 error:", error);
-
-      if (error instanceof BadRequestError) {
-        throw error;
-      }
-
-      throw new InternalServerError("이미지 요약 처리 중 오류가 발생했습니다.");
+      throw error;
     }
   }
 

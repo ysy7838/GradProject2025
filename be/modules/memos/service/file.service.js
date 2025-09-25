@@ -29,20 +29,29 @@ class FileService {
 
   // 파일 업로드 presigned URL 생성
   async getPresignedUrlForUpload(data) {
-    const {memoId, fileName, fileType} = data;
+    const {memoId, fileName, fileType, userId} = data;
     const bucketName = process.env.S3_BUCKET_NAME;
     const timestamp = Date.now();
 
-    const key = `images/${timestamp}-${fileName}`;
+    // userId를 포함한 key 생성
+    const key = userId 
+      ? `images/${userId}/${timestamp}-${fileName}`
+      : `images/${timestamp}-${fileName}`;
+    
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
       ContentType: fileType,
     });
 
-    const presignedUrl = await this._createPresignedUrl(command);
-    const finalUrl = process.env.S3_BASE_URL.replace(/\/+$/, '') + '/' + key.replace(/^\/+/, '');
-    return {presignedUrl, finalUrl};
+    const presignedUrl = await this._createPresignedUrl(command, 3600); // 1시간
+    const finalUrl = `${process.env.S3_BASE_URL}/${key}`;
+    
+    return {
+      presignedUrl, 
+      finalUrl,
+      key  // key 반환
+    };
   }
 
   // 파일 다운로드(조회) presigned URL 생성
@@ -55,10 +64,23 @@ class FileService {
       Key: key,
     });
 
-    const presignedUrl = await this._createPresignedUrl(command);
+    // 1시간 유효한 URL 생성 (필요에 따라 조정)
+    const presignedUrl = await this._createPresignedUrl(command, 3600);
     return presignedUrl;
   }
 
+  // 업로드 직후 확인용 Pre-signed URL 생성
+  async getPresignedUrlForDisplay(key, expiresIn = 3600) {
+    const bucketName = process.env.S3_BUCKET_NAME;
+
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    return await this._createPresignedUrl(command, expiresIn);
+  }
+  
   // 이미지를 S3에 직접 업로드
   async uploadImageToS3(data) {
     const { buffer, key, contentType } = data;

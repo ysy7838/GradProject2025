@@ -26,6 +26,7 @@ const MemoSchema = new Schema(
     images: [
       {
         url: String,
+        s3Key: String,
         summary: String,
         uploadedAt: Date,
         metadata: {
