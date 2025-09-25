@@ -11,7 +11,7 @@ const MemoSchema = new Schema(
       required: true,
     },
     title: {type: String, maxlength: 100},
-    content: {type: String, default: ""}, // 마크다운
+    content: {type: String, default: ""}, // HTML 태그
     isFavorite: {
       type: Boolean,
       default: false,
@@ -25,16 +25,17 @@ const MemoSchema = new Schema(
     // 이미지 필드 추가
     images: [
       {
-        url: String,
+        key: String,
         summary: String,
         uploadedAt: Date,
+        index: Number,
         metadata: {
           size: Number,
           mimeType: String,
-          originalName: String
-        }
-      }
-    ]
+          originalName: String,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

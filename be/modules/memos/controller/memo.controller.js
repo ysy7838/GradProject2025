@@ -30,8 +30,8 @@ class MemoController {
 
   /* POST /api/memos/ai/text :텍스트 요약 */
   async summarizeText(req, res) {
-    const { content } = req.body;
-    const data = { content };
+    const {content} = req.body;
+    const data = {content};
     const result = await this.memoService.summarizeText(data);
     res.status(200).json({
       message: MEMO_MESSAGES.SUMMARIZE_TEXT_SUCCESS,
@@ -41,8 +41,8 @@ class MemoController {
 
   /* POST /api/memos/ai/image :이미지 요약 (단일 이미지) */
   async summarizeImage(req, res) {
-    const { imageData } = req.body;
-    const data = { imageData };
+    const {imageData} = req.body;
+    const data = {imageData};
     const result = await this.memoService.summarizeImage(data);
     res.status(200).json({
       message: MEMO_MESSAGES.SUMMARIZE_IMAGE_SUCCESS,
@@ -52,9 +52,9 @@ class MemoController {
 
   /* POST /api/memos/:memoId/ai/text :텍스트 및 이미지 통합요약 */
   async summarizeMemoText(req, res) {
-    const { memoId } = req.params;
+    const {memoId} = req.params;
     const createdBy = req.user.id;
-    const data = { memoId, createdBy };
+    const data = {memoId, createdBy};
     const result = await this.memoService.summarizeMemoText(data);
     res.status(200).json({
       message: "메모 텍스트 요약이 성공적으로 생성되었습니다.",
@@ -64,8 +64,8 @@ class MemoController {
 
   /* POST /api/memos/ai/images :다중 이미지 요약 */
   async summarizeMultipleImages(req, res) {
-    const { imageDataArray } = req.body;
-    const data = { imageDataArray };
+    const {imageDataArray} = req.body;
+    const data = {imageDataArray};
     const result = await this.memoService.summarizeMultipleImages(data);
     res.status(200).json({
       message: "다중 이미지 요약이 성공적으로 생성되었습니다.",
@@ -73,70 +73,28 @@ class MemoController {
     });
   }
 
-  /**
-   * POST /api/memos/ai/image/upload
-   * 이미지를 S3에 업로드하고 요약 생성
-   */
+  /* POST /api/memos/ai/image/upload: 이미지를 S3에 업로드하고 요약 생성 */
   async summarizeImageUpload(req, res) {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
-          error: "이미지 파일이 제공되지 않았습니다."
-        });
-      }
-
-      const { memoId } = req.body; // 메모 ID (선택적)
-      const createdBy = req.user.id;
-
-      // 1. S3에 이미지 업로드
-      const timestamp = Date.now();
-      const fileName = `${timestamp}-${req.file.originalname}`;
-      const s3Key = `images/${createdBy}/${fileName}`;
-
-      const uploadData = {
-        buffer: req.file.buffer,
-        key: s3Key,
-        contentType: req.file.mimetype,
-        userId: createdBy
-      };
-
-      const s3Url = await this.fileService.uploadImageToS3(uploadData);
-
-      // 2. 이미지를 base64로 변환하여 요약 생성
-      const imageData = {
-        data: req.file.buffer.toString('base64'),
-        mimeType: req.file.mimetype
-      };
-
-      const summaryData = {
-        imageData,
-        s3Url,
-        memoId,
-        createdBy
-      };
-
-      const result = await this.memoService.summarizeImageWithS3(summaryData);
-
-      res.status(200).json({
-        message: MEMO_MESSAGES.SUMMARIZE_IMAGE_SUCCESS,
-        result: {
-          ...result,
-          imageUrl: s3Url // S3 URL 포함
-        }
-      });
-
-    } catch (error) {
-      console.error("Image upload summarization error:", error);
-      res.status(500).json({
-        error: "이미지 업로드 및 요약 중 오류가 발생했습니다."
+    if (!req.file) {
+      return res.status(400).json({
+        error: "이미지 파일이 제공되지 않았습니다.",
       });
     }
+    const {memoId} = req.body; // 메모 ID (선택적)
+    const createdBy = req.user.id;
+    const file = req.file;
+    const data = {file, createdBy, memoId};
+    const result = await this.memoService.summarizeImageWithS3(data);
+    res.status(200).json({
+      message: MEMO_MESSAGES.SUMMARIZE_IMAGE_SUCCESS,
+      result: result,
+    });
   }
 
   async createMemo(req, res) {
-    const {title, content, categoryId, tags} = req.body;
+    const {title, content, categoryId, tags, images} = req.body;
     const createdBy = req.user.id;
-    const data = {title, content, categoryId, createdBy, tags};
+    const data = {title, content, categoryId, createdBy, tags, images};
 
     const newMemo = await this.memoService.createMemo(data);
     res.status(201).json({
@@ -194,7 +152,7 @@ class MemoController {
   }
 
   async deleteMemos(req, res) {
-    const memoIds = req.query.memoIds ? req.query.memoIds.split(',') : [];
+    const memoIds = req.query.memoIds ? req.query.memoIds.split(",") : [];
     const createdBy = req.user.id;
     const data = {memoIds, createdBy};
     const memo = await this.memoService.deleteMemos(data);
@@ -217,9 +175,9 @@ class MemoController {
 
   async updateMemo(req, res) {
     const {memoId} = req.params;
-    const {title, content, tags} = req.body;
+    const {title, content, tags, images} = req.body;
     const createdBy = req.user.id;
-    const data = {memoId, title, content, createdBy, tags};
+    const data = {memoId, title, content, createdBy, tags, images};
     const memo = await this.memoService.updateMemo(data);
     res.status(200).json({
       message: MEMO_MESSAGES.UPDATE_SUCCESS,
@@ -275,7 +233,7 @@ class MemoController {
       result: result,
     });
   }
-  
+
   async recommendMemos(req, res) {
     const {memoId} = req.params;
     const createdBy = req.user.id;

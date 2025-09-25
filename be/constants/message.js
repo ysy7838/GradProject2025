@@ -165,6 +165,8 @@ export const FILE_MESSAGES = {
   FILE_UPLOAD_ERROR: "파일 업로드 중 오류가 발생했습니다.",
   FILE_DELETE_ERROR: "파일 삭제 중 오류가 발생했습니다.",
   FILE_DOWNLOAD_ERROR: "파일 다운로드 중 오류가 발생했습니다.",
+  FILE_COPY_ERROR: "파일 복사 중 오류가 발생했습니다.",
+  FILE_DELETE_ERROR: "파일 삭제 중 오류가 발생했습니다.",
 
   // 에러 메시지
   PRESIGNED_URL_ERROR: "Presigned URL 생성 중 오류가 발생했습니다.",

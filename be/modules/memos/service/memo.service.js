@@ -3,11 +3,13 @@ import {MEMO_MESSAGES} from "../../../constants/message.js";
 import {COMMON_MESSAGES} from "../../../constants/message.js";
 import {getCategoryAndCheckPermission} from "../../../utils/permissionCheck.js";
 import axios from "axios";
+import * as cheerio from "cheerio";
 
 class MemoService {
-  constructor(memoRepository, tagService, elasticClient, permissionCheckHelper, geminiService) {
+  constructor(memoRepository, tagService, fileService, elasticClient, permissionCheckHelper, geminiService) {
     this.memoRepository = memoRepository;
     this.tagService = tagService;
+    this.fileService = fileService;
     this.elasticClient = elasticClient;
     this.permissionCheckHelper = permissionCheckHelper;
     this.geminiService = geminiService;
@@ -50,7 +52,7 @@ class MemoService {
     return tagIds;
   }
 
-  // 마크다운을 일반 텍스트로 변환하는 헬퍼 함수 -> 다른 곳에서 처리를 하는지 확인
+  // HTML을 일반 텍스트로 변환하는 헬퍼 함수 -> 다른 곳에서 처리를 하는지 확인
   // 우선 놔두기
   async _convertMarkdownToText(markdownContent) {
     if (!markdownContent) {
@@ -154,12 +156,12 @@ class MemoService {
 
   // 생성
   async createMemo(data) {
-    const {title, content, categoryId, createdBy, tags} = data;
+    const {title, content, categoryId, createdBy, tags, images} = data;
 
     await getCategoryAndCheckPermission(categoryId, createdBy);
     const tagIds = await this._processTags(tags);
 
-    const dataToCreate = {title, content, categoryId, createdBy, tags: tagIds};
+    const dataToCreate = {title, content, categoryId, createdBy, tags: tagIds, images: images || []};
     try {
       const newMemo = await this.memoRepository.create(dataToCreate);
       const createdMemo = await this.memoRepository.findOne(newMemo._id);
@@ -177,12 +179,12 @@ class MemoService {
     const allowedSortKeys = ["title", "createdAt", "updatedAt"];
     const allowedSortOrders = ["asc", "desc"];
 
-      const {
-        categoryId,
-        createdBy,
-        sortKey: requestedSortKey = "updatedAt",
-        sortOrder: requestedSortOrder = "desc",
-      } = data;
+    const {
+      categoryId,
+      createdBy,
+      sortKey: requestedSortKey = "updatedAt",
+      sortOrder: requestedSortOrder = "desc",
+    } = data;
     await getCategoryAndCheckPermission(categoryId, createdBy);
 
     const sortKey = allowedSortKeys.includes(requestedSortKey) ? requestedSortKey : "updatedAt";
@@ -194,13 +196,43 @@ class MemoService {
     };
 
     const memos = await this.memoRepository.find(filter, projection, options);
-    return memos;
+    const memosWithPreview = await Promise.all(
+      memos.map(async (memo) => {
+        if (memo.images && memo.images.length > 0) {
+          const firstImageKey = memo.images[0].key;
+          const previewUrl = await this.fileService.getPresignedUrl(firstImageKey);
+          return {...memo, previewUrl};
+        }
+        return {...memo, previewUrl: null};
+      })
+    );
+    return memosWithPreview;
   }
 
   // 상세 조회
   async getMemoDetail(data) {
     const {memoId, createdBy} = data;
-    return this._getMemoAndCheckPermission(memoId, createdBy, true);
+    const memo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
+
+    if (memo.content) {
+      const $ = cheerio.load(memo.content);
+      const imgPromises = [];
+
+      // data-s3-key 속성을 가진 모든 img 태그를 찾습니다.
+      $("img[data-s3-key]").each((index, element) => {
+        const s3Key = $(element).attr("data-s3-key");
+        if (s3Key) {
+          const promise = this.fileService.getPresignedUrl(s3Key).then((presignedUrl) => {
+            $(element).attr("src", presignedUrl);
+          });
+          imgPromises.push(promise);
+        }
+      });
+
+      await Promise.all(imgPromises);
+      memo.content = $.html();
+    }
+    return memo;
   }
 
   // 메모 검색
@@ -282,7 +314,7 @@ class MemoService {
 
   // 메모 수정
   async updateMemo(data) {
-    const {memoId, title, content, createdBy, tags} = data;
+    const {memoId, title, content, createdBy, tags, images} = data;
     const existingMemo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
 
     if (existingMemo.tags && existingMemo.tags.length > 0) {
@@ -294,8 +326,8 @@ class MemoService {
     await this.tagService.incrementTagUsage(newTagIds);
 
     const filter = {_id: memoId, createdBy};
-    const update = {title, content, tags: newTagIds};
-    const updatedMemo = await this.memoRepository.updateOne(filter, update);
+    const update = {title, content, tags: newTagIds, images};
+    const updatedMemo = await this.memoRepository.updateOne({_id: memoId, createdBy}, update);
     if (!updatedMemo) {
       throw new NotFoundError(MEMO_MESSAGES.MEMO_NOT_FOUND_OR_NO_PERMISSION);
     }
@@ -360,12 +392,19 @@ class MemoService {
     const memo = await this._getMemoAndCheckPermission(memoId, createdBy, true);
     const title = memo.title + " copy";
     const {content, categoryId, tags} = memo;
-    const query = {title, content, categoryId, createdBy, tags};
+    let newImages = [];
 
-    // S3에서 이미지 복사하는 로직 추가 필요
-
+    if (memo.images && memo.images.length > 0) {
+      newImages = await Promise.all(
+        memo.images.map(async (img) => {
+          const newKey = `images/${createdBy}/${Date.now()}-${img.key.split("/").pop()}`;
+          await this.fileService.copyImageInS3(img.key, newKey);
+          return {...img, key: newKey, uploadedAt: new Date()};
+        })
+      );
+    }
+    const query = {title, content, categoryId, createdBy, tags, images: newImages};
     const copiedMemo = await this.memoRepository.create(query);
-
     if (tags && tags.length > 0) {
       await this.tagService.incrementTagUsage(tags);
     }
@@ -381,6 +420,7 @@ class MemoService {
       return {deletedCount: 0};
     }
 
+    const s3KeysToDelete = memosToDelete.flatMap((memo) => (memo.images ? memo.images.map((img) => img.key) : []));
     const memoIdsStrings = memosToDelete.map((memo) => memo._id.toString());
     const tagIdsToDecrement = memosToDelete.flatMap((memo) =>
       memo.tags ? memo.tags.map((tag) => tag._id.toString()) : []
@@ -388,9 +428,11 @@ class MemoService {
 
     const filter = {_id: {$in: memoIdsStrings}, createdBy};
     const result = await this.memoRepository.deleteMany(filter);
-
     if (tagIdsToDecrement.length > 0) {
       await this.tagService.decrementTagUsage(tagIdsToDecrement);
+    }
+    if (s3KeysToDelete.length > 0) {
+      await this.fileService.deleteImagesFromS3(s3KeysToDelete);
     }
     await this._deleteVectorsFromElasticsearch(memoIdsStrings);
     return result;
@@ -487,60 +529,50 @@ class MemoService {
       };
     } catch (error) {
       console.error("Image summarization error:", error);
-
-      if (error instanceof BadRequestError) {
-        throw error;
-      }
-
+      if (error instanceof BadRequestError) throw error;
       throw new InternalServerError("이미지 요약 처리 중 오류가 발생했습니다.");
     }
   }
 
   /* S3 업로드와 함께 이미지 요약 */
   async summarizeImageWithS3(data) {
-    try {
-      const {imageData, s3Url, memoId, createdBy} = data;
+    const {file, createdBy, memoId} = data;
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${file.originalname}`;
+    const s3Key = `images/${createdBy}/${fileName}`;
 
-      // 1. 이미지 요약 생성
-      const summaryResult = await this.geminiService.summarizeImage(imageData);
+    await this.fileService.uploadImageToS3({
+      buffer: file.buffer,
+      key: s3Key,
+      contentType: file.mimetype,
+    });
 
-      // 2. 메모가 있다면 이미지 URL 저장
-      if (memoId) {
-        const memo = await this._getMemoAndCheckPermission(memoId, createdBy);
+    const imageData = {
+      data: file.buffer.toString("base64"),
+      mimeType: file.mimetype,
+    };
+    const summaryResult = await this.summarizeImage({imageData});
 
-        // 메모에 이미지 URL 추가 (images 필드 추가 필요)
-        const updatedMemo = await this.memoRepository.updateOne(
-          {_id: memoId},
-          {
-            $push: {
-              images: {
-                url: s3Url,
-                summary: summaryResult.summary,
-                uploadedAt: new Date(),
-              },
-            },
-          }
-        );
-      }
-
-      return {
-        success: true,
+    if (memoId) {
+      const imageInfo = {
+        key: s3Key,
         summary: summaryResult.summary,
-        imageUrl: s3Url,
-        imageType: summaryResult.imageType,
-        summaryLength: summaryResult.summaryLength,
-        type: "image",
-        timestamp: summaryResult.timestamp,
+        uploadedAt: new Date(),
+        metadata: {
+          size: file.size,
+          mimeType: file.mimetype,
+          originalName: file.originalname,
+        },
       };
-    } catch (error) {
-      console.error("Image summarization with S3 error:", error);
-
-      if (error instanceof BadRequestError) {
-        throw error;
-      }
-
-      throw new InternalServerError("이미지 요약 처리 중 오류가 발생했습니다.");
+      await this.memoRepository.updateOne({_id: memoId, createdBy}, {$push: {images: imageInfo}});
     }
+    const presignedUrl = await this.fileService.getPresignedUrl(s3Key);
+
+    return {
+      ...summaryResult,
+      s3Key: s3Key,
+      imageUrl: presignedUrl,
+    };
   }
 
   /* 다중 이미지 요약 (이미지 그룹용) */
